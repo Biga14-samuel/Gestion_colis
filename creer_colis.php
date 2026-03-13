@@ -220,9 +220,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reference_colis'])) {
             }
             
             // Construire la requête INSERT en fonction des colonnes disponibles
-            $insert_cols = "utilisateur_id, ibox_id, agent_id, reference_colis, description, poids, dimensions, valeur_declaree, fragile, urgent, statut, code_tracking, instructions";
-            $insert_vals = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente', ?, ?";
-            $insert_params = [$userId, $ibox_id > 0 ? $ibox_id : null, $valid_agent_id > 0 ? $valid_agent_id : null, $reference_colis, $description, $poids, $dimensions, $valeur_declaree, $fragile, $urgent, $code_tracking, $instructions];
+            $insert_cols = "utilisateur_id, expediteur_id, ibox_id, agent_id, reference_colis, description, poids, dimensions, valeur_declaree, fragile, urgent, statut, code_tracking, instructions";
+            $insert_vals = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente', ?, ?";
+            $insert_params = [$userId, $userId, $ibox_id > 0 ? $ibox_id : null, $valid_agent_id > 0 ? $valid_agent_id : null, $reference_colis, $description, $poids, $dimensions, $valeur_declaree, $fragile, $urgent, $code_tracking, $instructions];
             
             // Ajouter zone_livraison si la colonne existe
             if ($zone_colonne_existe && $zone_livraison !== null) {

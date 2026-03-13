@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // Générer le code de retrait
                             require_once '../../utils/pickup_code_service.php';
                             $pickupService = new PickupCodeService();
-                            $pickupResult = $pickupService->generateCode($colisId, 'pin', false);
+                            $pickupResult = $pickupService->generateCode($colisId, 'pin');
                             
                             // Mettre à jour le statut de l'iBox à "recu" (contenant un colis prêt au retrait)
                             $stmt = $pdo->prepare("UPDATE ibox SET statut = 'recu' WHERE id = ?");
