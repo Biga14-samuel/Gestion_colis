@@ -359,8 +359,11 @@ class PickupCodeService {
         if (is_string($secret) && $secret !== '') {
             return $secret;
         }
-        // Fallback conservateur pour éviter de générer des QR non vérifiables
-        return hash('sha256', (string) (DB_PASS ?? ''));
+        if (function_exists('is_development_env') && is_development_env()) {
+            // Dev fallback to keep QR usable without leaking a fixed production secret.
+            return hash('sha256', (string) (DB_PASS ?? ''));
+        }
+        throw new RuntimeException('PICKUP_QR_SECRET manquant. Définissez-le en production.');
     }
     
     /**

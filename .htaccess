@@ -5,6 +5,7 @@ ServerSignature Off
     RewriteEngine On
     RewriteRule ^\. - [F,L]
     RewriteRule ^\.git/ - [F,L]
+    RewriteRule ^uploads/ - [F,L]
     RewriteRule ^(config|utils|migrations|database|docs|keys|logs|cron)/ - [F,L]
 </IfModule>
 
