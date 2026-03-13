@@ -208,13 +208,15 @@ class EmailService {
         if (empty($sendmailPath)) {
             $sendmailPath = '/usr/sbin/sendmail';
         }
+        $sendmail = escapeshellcmd($sendmailPath);
+        $fromEmail = escapeshellarg($this->config['from_email']);
         
         $headers = $this->buildHeaders();
         $subject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         
         $pipes = [];
         $process = proc_open(
-            "$sendmail -t -f {$this->config['from_email']}",
+            "$sendmail -t -f $fromEmail",
             ['w' => ['pipe', 'w']],
             $pipes
         );

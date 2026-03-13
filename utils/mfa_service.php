@@ -30,10 +30,10 @@ class MFAService {
         
         // Générer les codes de backup
         $backupCodes = $this->generateBackupCodes();
-        $backupCodesHashed = password_hash(json_encode($backupCodes), PASSWORD_DEFAULT);
+        $backupCodesJson = json_encode($backupCodes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         
         $stmt = $this->db->prepare("UPDATE utilisateurs SET mfa_backup_codes = ? WHERE id = ?");
-        $stmt->execute([$backupCodesHashed, $userId]);
+        $stmt->execute([$backupCodesJson, $userId]);
         
         // Récupérer les informations utilisateur
         $stmt = $this->db->prepare("SELECT email, prenom, nom FROM utilisateurs WHERE id = ?");
@@ -159,8 +159,13 @@ class MFAService {
             $this->generateTOTP($secret, $time),
             $this->generateTOTP($secret, $time + 1)
         ];
-        
-        return in_array($code, $codes);
+
+        foreach ($codes as $expected) {
+            if (hash_equals($expected, (string) $code)) {
+                return true;
+            }
+        }
+        return false;
     }
     
     /**
