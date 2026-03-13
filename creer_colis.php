@@ -244,21 +244,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reference_colis'])) {
                         @mkdir($signature_dir, 0755, true);
                     }
                     
-                    $signature_filename = 'signature_' . $colis_id . '_' . time() . '.png';
-                    $signature_path = $signature_dir . '/' . $signature_filename;
-                    
-                    // Decoder l'image base64 et l'enregistrer
                     $signature_data_clean = str_replace(['data:image/png;base64,', 'data:image/jpeg;base64,'], '', $signature_data);
                     $signature_binary = base64_decode($signature_data_clean, true);
-                    
-                    if ($signature_binary !== false && @file_put_contents($signature_path, $signature_binary)) {
-                        // Mettre à jour le colis avec le chemin de la signature
-                        try {
-                            $stmt_sig = $db->prepare("UPDATE colis SET signature_image = ? WHERE id = ?");
-                            $stmt_sig->execute(['uploads/signatures/' . $signature_filename, $colis_id]);
-                        } catch (Exception $e) {
-                            // La colonne signature_image peut ne pas exister
-                            error_log('Erreur enregistrement signature: ' . $e->getMessage());
+
+                    $signature_valid = false;
+                    $signature_ext = 'png';
+                    if ($signature_binary !== false) {
+                        $imageInfo = @getimagesizefromstring($signature_binary);
+                        $mime = $imageInfo['mime'] ?? '';
+                        $realMime = '';
+                        if (class_exists('finfo')) {
+                            $finfo = new finfo(FILEINFO_MIME_TYPE);
+                            $realMime = $finfo->buffer($signature_binary) ?: '';
+                        }
+                        $allowedMimes = ['image/png', 'image/jpeg'];
+
+                        if ($imageInfo && in_array($mime, $allowedMimes, true)) {
+                            if ($realMime === '' || in_array($realMime, $allowedMimes, true)) {
+                                $signature_valid = true;
+                                $signature_ext = $mime === 'image/jpeg' ? 'jpg' : 'png';
+                            }
+                        }
+                    }
+
+                    if ($signature_valid) {
+                        $signature_filename = 'signature_' . $colis_id . '_' . time() . '.' . $signature_ext;
+                        $signature_path = $signature_dir . '/' . $signature_filename;
+
+                        if (@file_put_contents($signature_path, $signature_binary)) {
+                            // Mettre à jour le colis avec le chemin de la signature
+                            try {
+                                $stmt_sig = $db->prepare("UPDATE colis SET signature_image = ? WHERE id = ?");
+                                $stmt_sig->execute(['uploads/signatures/' . $signature_filename, $colis_id]);
+                            } catch (Exception $e) {
+                                // La colonne signature_image peut ne pas exister
+                                error_log('Erreur enregistrement signature: ' . $e->getMessage());
+                            }
                         }
                     }
                 }

@@ -32,6 +32,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $telephone = trim($_POST['telephone'] ?? '');
                 $mot_de_passe = $_POST['mot_de_passe'] ?? '';
                 $role = $_POST['role'] ?? 'utilisateur';
+                $allowedRoles = ['utilisateur', 'agent', 'admin'];
+                if (!in_array($role, $allowedRoles, true)) {
+                    $role = 'utilisateur';
+                }
                 
                 if (empty($nom) || empty($prenom) || empty($email) || empty($mot_de_passe)) {
                     $ajaxResponse['message'] = 'Tous les champs obligatoires doivent être remplis.';
@@ -63,11 +67,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $email = trim($_POST['email'] ?? '');
                 $telephone = trim($_POST['telephone'] ?? '');
                 $role = $_POST['role'] ?? 'utilisateur';
+                $allowedRoles = ['utilisateur', 'agent', 'admin'];
+                if (!in_array($role, $allowedRoles, true)) {
+                    $ajaxResponse['message'] = 'Rôle invalide.';
+                    break;
+                }
                 $mot_de_passe = $_POST['mot_de_passe'] ?? '';
                 
                 if ($id <= 0 || empty($nom) || empty($prenom) || empty($email)) {
                     $ajaxResponse['message'] = 'Données invalides.';
                 } else {
+                    if ($id === (int) $_SESSION['user_id'] && $role !== 'admin') {
+                        $ajaxResponse['message'] = 'Vous ne pouvez pas retirer votre rôle administrateur.';
+                        break;
+                    }
                     if (!empty($mot_de_passe)) {
                         $passwordErrors = PasswordPolicy::validate($mot_de_passe);
                         if (!empty($passwordErrors)) {

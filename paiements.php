@@ -241,7 +241,7 @@ if (!empty($_GET['session_id'])) {
                 $message = $verify['message'] ?? 'Paiement carte non confirmé.';
                 $messageType = 'error';
             } else {
-                $apply = applyStripePayment($db, $verify['colis_ids'] ?? [], $sessionId, $user_id, $verify);
+                $apply = $stripeHelper->applyStripePayment($verify['colis_ids'] ?? [], $sessionId, $user_id, $verify);
                 if (!$apply['success']) {
                     $message = $apply['message'] ?? 'Impossible de valider le paiement carte.';
                     $messageType = 'error';
@@ -311,85 +311,6 @@ if (
 if (isset($_GET['cancel'])) {
     $message = 'Paiement annulé. Vous pouvez réessayer plus tard.';
     $messageType = 'info';
-}
-
-function applyStripePayment(PDO $db, array $colisIds, string $sessionId, int $userId, array $verify = []): array {
-    $colisIds = array_values(array_filter(array_map('intval', $colisIds)));
-    if (empty($colisIds)) {
-        return ['success' => false, 'message' => 'Aucun colis associé au paiement.'];
-    }
-
-    $placeholders = implode(',', array_fill(0, count($colisIds), '?'));
-    $stmt = $db->prepare("
-        SELECT id, expediteur_id, destinataire_id, utilisateur_id, payment_amount, payment_currency, payment_metadata, payment_status
-        FROM colis
-        WHERE id IN ($placeholders)
-          AND (expediteur_id = ? OR destinataire_id = ?)
-    ");
-    $stmt->execute(array_merge($colisIds, [$userId, $userId]));
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    if (empty($rows)) {
-        return ['success' => false, 'message' => 'Colis introuvable pour ce paiement.'];
-    }
-
-    foreach ($rows as $row) {
-        if (($row['payment_status'] ?? '') === 'paid') {
-            continue;
-        }
-
-        $meta = [];
-        if (!empty($row['payment_metadata'])) {
-            $decoded = json_decode($row['payment_metadata'], true);
-            if (is_array($decoded)) {
-                $meta = $decoded;
-            }
-        }
-        $meta['stripe_session_id'] = $sessionId;
-        $meta['provider'] = 'stripe';
-        if (!empty($verify)) {
-            $meta['verified_at'] = date('c');
-        }
-
-        $update = $db->prepare("
-            UPDATE colis
-            SET payment_status = 'paid',
-                paid_at = NOW(),
-                payment_provider = 'stripe',
-                payment_reference = ?,
-                payment_metadata = ?,
-                payment_last_error = NULL
-            WHERE id = ?
-        ");
-        $update->execute([
-            $sessionId,
-            json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            $row['id']
-        ]);
-
-        $check = $db->prepare("SELECT id FROM paiements WHERE colis_id = ? AND transaction_id = ? LIMIT 1");
-        $check->execute([$row['id'], $sessionId]);
-        if (!$check->fetch()) {
-            $insert = $db->prepare("
-                INSERT INTO paiements (utilisateur_id, colis_id, montant, devise, mode_paiement, transaction_id, statut, date_paiement, details)
-                VALUES (?, ?, ?, ?, 'carte', ?, 'paye', NOW(), ?)
-            ");
-            $details = [
-                'provider' => 'stripe',
-                'session_id' => $sessionId
-            ];
-            $insert->execute([
-                $userId,
-                $row['id'],
-                $row['payment_amount'] ?? 0,
-                strtoupper((string) ($row['payment_currency'] ?? 'XAF')),
-                $sessionId,
-                json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            ]);
-        }
-    }
-
-    return ['success' => true];
 }
 
 // Formater le montant

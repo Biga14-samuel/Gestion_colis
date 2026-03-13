@@ -13,6 +13,7 @@ $db = $database->getConnection();
 
 $user_id = $_SESSION['user_id'] ?? 0;
 $colis_id = $_GET['colis_id'] ?? 0;
+$user_role = $_SESSION['user_role'] ?? '';
 
 // Vérifier l'accès
 if (!$user_id || !$colis_id) {
@@ -20,25 +21,52 @@ if (!$user_id || !$colis_id) {
     exit;
 }
 
-// Récupérer les détails du colis
-$stmt = $db->prepare("
-    SELECT c.*, 
-           u.prenom as expediteur_prenom, u.nom as expediteur_nom,
-           d.prenom as destinataire_prenom, d.nom as destinataire_nom,
-           d.adresse as destinataire_adresse, d.telephone as destinataire_tel,
-           a.zone_livraison
-    FROM colis c
-    LEFT JOIN utilisateurs u ON c.expediteur_id = u.id
-    LEFT JOIN utilisateurs d ON c.destinataire_id = d.id
-    LEFT JOIN agents a ON c.agent_id = a.id
-    WHERE c.id = ? AND (
-        c.agent_id = ? OR c.agent_id IN (
-            SELECT id FROM agents WHERE utilisateur_id = ?
-        )
-    )
-");
-$stmt->execute([$colis_id, $user_id, $user_id]);
-$colis = $stmt->fetch();
+if (!in_array($user_role, ['agent', 'admin'], true)) {
+    echo '<div class="alert alert-danger">Accès refusé.</div>';
+    exit;
+}
+
+if ($user_role === 'admin') {
+    $stmt = $db->prepare("
+        SELECT c.*, 
+               u.prenom as expediteur_prenom, u.nom as expediteur_nom,
+               d.prenom as destinataire_prenom, d.nom as destinataire_nom,
+               d.adresse as destinataire_adresse, d.telephone as destinataire_tel,
+               a.zone_livraison
+        FROM colis c
+        LEFT JOIN utilisateurs u ON c.expediteur_id = u.id
+        LEFT JOIN utilisateurs d ON c.destinataire_id = d.id
+        LEFT JOIN agents a ON c.agent_id = a.id
+        WHERE c.id = ?
+    ");
+    $stmt->execute([$colis_id]);
+    $colis = $stmt->fetch();
+} else {
+    $agentStmt = $db->prepare("SELECT id FROM agents WHERE utilisateur_id = ? LIMIT 1");
+    $agentStmt->execute([$user_id]);
+    $agent = $agentStmt->fetch();
+    if (!$agent) {
+        echo '<div class="alert alert-danger">Profil agent introuvable.</div>';
+        exit;
+    }
+
+    $stmt = $db->prepare("
+        SELECT c.*, 
+               u.prenom as expediteur_prenom, u.nom as expediteur_nom,
+               d.prenom as destinataire_prenom, d.nom as destinataire_nom,
+               d.adresse as destinataire_adresse, d.telephone as destinataire_tel,
+               a.zone_livraison
+        FROM colis c
+        JOIN livraisons l ON l.colis_id = c.id AND l.agent_id = ?
+        LEFT JOIN utilisateurs u ON c.expediteur_id = u.id
+        LEFT JOIN utilisateurs d ON c.destinataire_id = d.id
+        LEFT JOIN agents a ON l.agent_id = a.id
+        WHERE c.id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$agent['id'], $colis_id]);
+    $colis = $stmt->fetch();
+}
 
 if (!$colis) {
     echo '<div class="alert alert-danger">Colis non trouvé ou non assigné.</div>';
