@@ -287,7 +287,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reference_colis'])) {
                             $ajaxResponse['pickup_code'] = $pickupResult['code'] ?? null;
                         } else {
                             // Générer un code de retrait simple si le service n'est pas disponible
-                            $pickup_code = strtoupper(substr(md5($colis_id . time()), 0, 6));
+                            $codeLength = 6;
+                            try {
+                                $cfg = require 'config/config.php';
+                                if (isset($cfg['pickup_codes']['code_length'])) {
+                                    $codeLength = max(4, (int) $cfg['pickup_codes']['code_length']);
+                                }
+                            } catch (Exception $e) {
+                                $codeLength = 6;
+                            }
+                            $bytes = (int) ceil($codeLength / 2);
+                            $pickup_code = strtoupper(substr(bin2hex(random_bytes($bytes)), 0, $codeLength));
                             $ajaxResponse['pickup_code'] = $pickup_code;
                             
                             // Enregistrer le code manuellement

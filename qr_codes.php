@@ -39,7 +39,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'regenerate_postal_qr') {
     
     if ($postal) {
         // Générer un nouveau code unique
-        $new_code = 'PID' . strtoupper(substr(md5(uniqid() . $user_id . time()), 0, 10));
+        $new_code = 'PID' . strtoupper(bin2hex(random_bytes(5)));
         $stmt = $db->prepare("UPDATE postal_id SET postal_code = ? WHERE id = ?");
         $stmt->execute([$new_code, $postal['id']]);
         

@@ -312,6 +312,36 @@ class MobileMoneyHelper {
         ];
     }
 
+    public function verifyCallbackSignature(string $provider, string $rawBody, array $headers = []): array {
+        $provider = $this->normalizeProvider($provider);
+        if ($provider === '') {
+            return ['success' => false, 'message' => 'Fournisseur non reconnu.'];
+        }
+
+        if ($this->config['simulate']) {
+            return ['success' => true];
+        }
+
+        $secret = $this->config[$provider]['webhook_secret'] ?? '';
+        if (!$secret) {
+            return ['success' => false, 'message' => 'Signature webhook non configurée.'];
+        }
+
+        $signature = $this->getHeaderValue($headers, $this->signatureHeaderCandidates($provider));
+        if (!$signature) {
+            return ['success' => false, 'message' => 'Signature webhook manquante.'];
+        }
+
+        $signature = trim($signature);
+        $expectedHex = hash_hmac('sha256', $rawBody, $secret);
+        $expectedBase64 = base64_encode(hash_hmac('sha256', $rawBody, $secret, true));
+
+        $valid = hash_equals($expectedHex, $signature) || hash_equals($expectedBase64, $signature);
+        return $valid
+            ? ['success' => true]
+            : ['success' => false, 'message' => 'Signature webhook invalide.'];
+    }
+
     public function handleCallback(string $provider, array $payload, array $headers = []): array {
         $provider = $this->normalizeProvider($provider);
         if ($provider === '') {
@@ -338,6 +368,28 @@ class MobileMoneyHelper {
             'reference' => $reference,
             'status' => $apply['status'] ?? 'pending'
         ];
+    }
+
+    private function signatureHeaderCandidates(string $provider): array {
+        $common = ['x-signature', 'x-webhook-signature'];
+        if ($provider === 'orange') {
+            return array_merge($common, ['x-orange-signature', 'x-om-signature']);
+        }
+        return array_merge($common, ['x-momo-signature', 'x-mtn-signature']);
+    }
+
+    private function getHeaderValue(array $headers, array $names): ?string {
+        $lookup = array_map('strtolower', $names);
+        foreach ($headers as $key => $value) {
+            $name = strtolower((string) $key);
+            if (in_array($name, $lookup, true)) {
+                if (is_array($value)) {
+                    return (string) ($value[0] ?? '');
+                }
+                return (string) $value;
+            }
+        }
+        return null;
     }
 
     private function fetchPendingColis(int $userId, $colisId): array {

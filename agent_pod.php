@@ -28,6 +28,12 @@ $stmt = $db->prepare("SELECT * FROM agents WHERE utilisateur_id = ?");
 $stmt->execute([$user_id]);
 $agent = $stmt->fetch();
 
+if (!$agent) {
+    header('HTTP/1.1 403 Forbidden');
+    echo '<div class="access-denied">Accès refusé. Profil agent introuvable.</div>';
+    exit;
+}
+
 // Récupérer les livraisons assignées à l'agent via la table livraisons
 $stmt = $db->prepare("
     SELECT c.*, 
@@ -61,17 +67,40 @@ $stmt = $db->prepare("
 $stmt->execute([$agent['id'] ?? 0]);
 $todayDeliveries = $stmt->fetch();
 
+function agent_has_colis(PDO $db, int $agentId, int $colisId, array $allowedStatuses = []): bool {
+    $sql = "
+        SELECT 1
+        FROM livraisons
+        WHERE colis_id = ? AND agent_id = ?
+    ";
+    $params = [$colisId, $agentId];
+    if (!empty($allowedStatuses)) {
+        $placeholders = implode(',', array_fill(0, count($allowedStatuses), '?'));
+        $sql .= " AND statut IN ($placeholders)";
+        $params = array_merge($params, $allowedStatuses);
+    }
+    $sql .= " LIMIT 1";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    return (bool) $stmt->fetchColumn();
+}
+
 // Traitement de la livraison
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
     if ($action === 'complete_delivery') {
-        $colis_id = $_POST['colis_id'] ?? 0;
+        $colis_id = (int) ($_POST['colis_id'] ?? 0);
         $signature_data = $_POST['signature_data'] ?? '';
         $recipient_name = $_POST['recipient_name'] ?? '';
         $notes = $_POST['notes'] ?? '';
         $latitude = $_POST['latitude'] ?? null;
         $longitude = $_POST['longitude'] ?? null;
+
+        if ($colis_id <= 0 || !agent_has_colis($db, (int) $agent['id'], $colis_id, ['assignee', 'en_cours'])) {
+            $message = 'Ce colis ne vous est pas assigné.';
+            $messageType = 'error';
+        } else {
         
         // Gérer l'upload de la photo
         $proof_photo_path = null;
@@ -94,9 +123,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($binary === false) {
                     $photoError = 'Photo de preuve invalide.';
                 } else {
+                    $maxBytes = 5 * 1024 * 1024;
+                    if (strlen($binary) > $maxBytes) {
+                        $photoError = 'Photo trop volumineuse (max 5 Mo).';
+                    }
+                }
+
+                if (!$photoError) {
                     $imageInfo = @getimagesizefromstring($binary);
                     $mime = $imageInfo['mime'] ?? '';
-                    if (!$imageInfo || !in_array($mime, ['image/jpeg', 'image/png'], true)) {
+                    $realMime = '';
+                    if (class_exists('finfo')) {
+                        $finfo = new finfo(FILEINFO_MIME_TYPE);
+                        $realMime = $finfo->buffer($binary) ?: '';
+                    }
+                    $allowedMimes = ['image/jpeg', 'image/png'];
+
+                    if (!$imageInfo || !in_array($mime, $allowedMimes, true)) {
+                        $photoError = 'Photo de preuve invalide.';
+                    } elseif ($realMime !== '' && !in_array($realMime, $allowedMimes, true)) {
                         $photoError = 'Photo de preuve invalide.';
                     } else {
                         $extension = $mime === 'image/png' ? 'png' : 'jpg';
@@ -126,7 +171,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Mettre à jour le colis
             $stmt = $db->prepare("
-                UPDATE colis SET
+                UPDATE colis c
+                JOIN livraisons l ON l.colis_id = c.id AND l.agent_id = ?
+                SET
                     statut = 'livre',
                     signature_data = ?,
                     signature_level = ?,
@@ -136,9 +183,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     delivery_notes = ?,
                     date_livraison = NOW(),
                     delivered_at = NOW()
-                WHERE id = ?
+                WHERE c.id = ?
             ");
-            $stmt->execute([$signature_data, $signature_level, $proof_photo_path, $recipient_name, $notes, $colis_id]);
+            $stmt->execute([
+                (int) $agent['id'],
+                $signature_data,
+                $signature_level,
+                $proof_photo_path,
+                $recipient_name,
+                $notes,
+                $colis_id
+            ]);
+
+            if ($stmt->rowCount() === 0) {
+                throw new RuntimeException('Colis non assigné à cet agent.');
+            }
             
             // Mettre à jour la table livraisons
             $stmt = $db->prepare("
@@ -201,6 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'error';
             }
         }
+        }
     }
     
     if ($action === 'update_location') {
@@ -221,21 +281,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     if ($action === 'start_delivery') {
-        $colis_id = $_POST['colis_id'] ?? 0;
+        $colis_id = (int) ($_POST['colis_id'] ?? 0);
         
         // Mettre à jour le statut dans livraisons et colis
-        $stmt = $db->prepare("UPDATE livraisons SET statut = 'en_cours' WHERE colis_id = ? AND agent_id = ?");
+        $stmt = $db->prepare("UPDATE livraisons SET statut = 'en_cours' WHERE colis_id = ? AND agent_id = ? AND statut = 'assignee'");
         $stmt->execute([$colis_id, $agent['id'] ?? 0]);
+
+        if ($stmt->rowCount() === 0) {
+            echo json_encode(['success' => false, 'message' => 'Colis non assigné ou déjà en cours.']);
+            exit;
+        }
         
-        $stmt = $db->prepare("UPDATE colis SET statut = 'en_livraison' WHERE id = ?");
-        $stmt->execute([$colis_id]);
+        $stmt = $db->prepare("
+            UPDATE colis c
+            JOIN livraisons l ON l.colis_id = c.id AND l.agent_id = ?
+            SET statut = 'en_livraison'
+            WHERE c.id = ?
+        ");
+        $stmt->execute([$agent['id'] ?? 0, $colis_id]);
         
         echo json_encode(['success' => true]);
         exit;
     }
     
     if ($action === 'fail_delivery') {
-        $colis_id = $_POST['colis_id'] ?? 0;
+        $colis_id = (int) ($_POST['colis_id'] ?? 0);
         $reason = $_POST['reason'] ?? '';
         
         try {
@@ -247,15 +317,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 WHERE colis_id = ? AND agent_id = ?
             ");
             $stmt->execute([$reason, $colis_id, $agent['id'] ?? 0]);
+
+            if ($stmt->rowCount() === 0) {
+                throw new RuntimeException('Colis non assigné.');
+            }
             
             // Mettre à jour le colis
             $stmt = $db->prepare("
-                UPDATE colis SET 
+                UPDATE colis c
+                JOIN livraisons l ON l.colis_id = c.id AND l.agent_id = ?
+                SET
                     statut = 'retour',
                     delivery_notes = ?
-                WHERE id = ?
+                WHERE c.id = ?
             ");
-            $stmt->execute([$reason, $colis_id]);
+            $stmt->execute([$agent['id'] ?? 0, $reason, $colis_id]);
             
             $message = 'Livraison marquée comme échouée. Le colis sera retourné.';
             $messageType = 'warning';

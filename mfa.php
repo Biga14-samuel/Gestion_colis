@@ -6,7 +6,7 @@
 
 require_once __DIR__ . '/utils/session.php';
 SessionManager::start();
-require_once '../config/database.php';
+require_once __DIR__ . '/config/database.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } elseif (verifyMfaCode($secret, $code)) {
             // Activer MFA pour l'utilisateur
-            $stmt = $db->prepare("UPDATE utilisateurs SET mfa_secret = ?, mfa_enabled = 1 WHERE id = ?");
+            $stmt = $db->prepare("UPDATE utilisateurs SET mfa_secret = ?, mfa_active = 1 WHERE id = ?");
             $stmt->execute([$secret, $user_id]);
             
             // Générer les codes de secours
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch();
         
         if ($user && verifyMfaCode($user['mfa_secret'], $code)) {
-            $stmt = $db->prepare("UPDATE utilisateurs SET mfa_secret = NULL, mfa_enabled = 0, mfa_backup_codes = NULL WHERE id = ?");
+            $stmt = $db->prepare("UPDATE utilisateurs SET mfa_secret = NULL, mfa_active = 0, mfa_backup_codes = NULL WHERE id = ?");
             $stmt->execute([$user_id]);
             
             createNotification($user_id, 'security', 'Sécurité réduite', 
@@ -120,11 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Récupérer le statut MFA de l'utilisateur
-$stmt = $db->prepare("SELECT mfa_secret, mfa_enabled, mfa_backup_codes FROM utilisateurs WHERE id = ?");
+$stmt = $db->prepare("SELECT mfa_secret, mfa_active, mfa_backup_codes FROM utilisateurs WHERE id = ?");
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
-$mfaEnabled = $user['mfa_enabled'] ?? false;
+$mfaEnabled = $user['mfa_active'] ?? false;
 $pendingSecret = $_SESSION['pending_mfa_secret'] ?? '';
 
 // Fonctions MFA

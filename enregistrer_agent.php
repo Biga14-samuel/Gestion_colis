@@ -17,6 +17,10 @@ $db = $database->getConnection();
 $message = '';
 $messageType = '';
 
+function generate_agent_matricule(): string {
+    return 'AGT' . strtoupper(bin2hex(random_bytes(4)));
+}
+
 // Traitement du formulaire d'enregistrement d'agent
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ajaxMode = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
@@ -60,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (empty($matricule)) {
         // Générer automatiquement un matricule si non fourni
-        $matricule = 'AGT' . strtoupper(substr(md5(time() . rand()), 0, 6));
+        $matricule = generate_agent_matricule();
     }
     
     // Vérifier les doublons
@@ -78,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$matricule]);
             if ($stmt->fetch()) {
                 // Générer un nouveau matricule unique
-                $matricule = 'AGT' . strtoupper(substr(md5(time() . rand() . microtime()), 0, 6));
+                $matricule = generate_agent_matricule();
             }
         } catch (PDOException $e) {
             $errors[] = user_error_message($e, 'enregistrer_agent.verification', "Erreur lors de la vérification des données.");

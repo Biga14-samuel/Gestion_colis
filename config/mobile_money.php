@@ -36,6 +36,7 @@ function mobile_money_config(): array {
             'client_id' => getenv('OM_CLIENT_ID') ?: '',
             'client_secret' => getenv('OM_CLIENT_SECRET') ?: '',
             'merchant_key' => getenv('OM_MERCHANT_KEY') ?: '',
+            'webhook_secret' => getenv('OM_WEBHOOK_SECRET') ?: '',
             'token_url' => getenv('OM_TOKEN_URL') ?: 'https://api.orange.com/oauth/v3/token',
             'payment_url' => getenv('OM_PAYMENT_URL') ?: '',
             'status_url' => getenv('OM_STATUS_URL') ?: '',
@@ -55,6 +56,7 @@ function mobile_money_config(): array {
             'api_key' => getenv('MOMO_API_KEY') ?: '',
             'target_env' => getenv('MOMO_TARGET_ENV') ?: 'sandbox',
             'callback_url' => getenv('MOMO_CALLBACK_URL') ?: '',
+            'webhook_secret' => getenv('MOMO_WEBHOOK_SECRET') ?: '',
         ],
     ];
 }

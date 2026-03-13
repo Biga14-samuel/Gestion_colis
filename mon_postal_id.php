@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['creer_postal_id'])) {
     if (empty($errors)) {
         try {
             // Générer un code Postal ID unique
-            $identifiant_postal = 'PID' . strtoupper(substr(md5(uniqid() . $user_id), 0, 10));
+            $identifiant_postal = 'PID' . strtoupper(bin2hex(random_bytes(5)));
             
             // Vérifier si l'utilisateur a déjà un Postal ID actif
             $stmt = $db->prepare("SELECT id FROM postal_id WHERE utilisateur_id = ? AND actif = 1");

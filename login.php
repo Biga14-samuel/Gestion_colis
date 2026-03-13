@@ -238,20 +238,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email'])) {
                         rate_limit_clear($db, $ip, '');
                         $error = "Votre email n'est pas vérifié. Un lien de vérification vient de vous être envoyé.";
                     } else {
-                    // Régénérer l'ID de session pour prévenir les attaques de fixation de session
-                    session_regenerate_id(true);
-                    
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_role'] = $user['role'];
-                    $_SESSION['user_nom'] = $user['nom'];
-                    $_SESSION['user_prenom'] = $user['prenom'];
-                    $_SESSION['theme_preference'] = $user['theme_preference'] ?? 'light';
+                        $mfaEnabled = !empty($user['mfa_active']) || !empty($user['mfa_enabled']);
+                        $mfaSecret = $user['mfa_secret'] ?? '';
 
-                    rate_limit_clear($db, $ip, $emailKey);
-                    rate_limit_clear($db, $ip, '');
-                    
-                    header('Location: dashboard.php');
-                    exit;
+                        if ($mfaEnabled && $mfaSecret) {
+                            session_regenerate_id(true);
+                            $_SESSION['mfa_pending_user_id'] = $user['id'];
+                            $_SESSION['mfa_pending_created_at'] = time();
+                            $_SESSION['mfa_pending_email'] = $user['email'] ?? '';
+
+                            rate_limit_clear($db, $ip, $emailKey);
+                            rate_limit_clear($db, $ip, '');
+
+                            header('Location: mfa_verify.php');
+                            exit;
+                        }
+
+                        // Régénérer l'ID de session pour prévenir les attaques de fixation de session
+                        session_regenerate_id(true);
+
+                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['user_role'] = $user['role'];
+                        $_SESSION['user_nom'] = $user['nom'];
+                        $_SESSION['user_prenom'] = $user['prenom'];
+                        $_SESSION['theme_preference'] = $user['theme_preference'] ?? 'light';
+
+                        unset($_SESSION['mfa_pending_user_id'], $_SESSION['mfa_pending_created_at'], $_SESSION['mfa_pending_email']);
+
+                        rate_limit_clear($db, $ip, $emailKey);
+                        rate_limit_clear($db, $ip, '');
+
+                        header('Location: dashboard.php');
+                        exit;
                     }
                 } else {
                     $failureInfo = rate_limit_register_failure($db, $ip, $rateLimitKeys, $now, $userAgent);
