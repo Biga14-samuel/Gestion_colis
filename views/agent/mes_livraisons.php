@@ -28,6 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $livraisonId = (int)($_POST['livraison_id'] ?? 0);
                 $colisId = (int)($_POST['colis_id'] ?? 0);
                 $newStatus = $_POST['statut'] ?? '';
+                if ($newStatus === 'terminee') {
+                    $newStatus = 'livree';
+                }
                 $commentaire = trim($_POST['commentaire'] ?? '');
                 
                 // Verifier que la livraison appartient bien a cet agent (sauf pour admin)
@@ -58,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // Mettre a jour le statut du colis en fonction du statut de la livraison
                     $colisStatus = match($newStatus) {
-                        'terminee' => 'livre',
+                        'livree' => 'livre',
                         'annulee' => 'retourne',
                         'en_cours' => 'en_livraison',
                         default => 'en_attente'
@@ -67,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([$colisStatus, $colisId]);
                     
                     // Si la livraison est terminee, enregistrer la date et gérer la livraison iBox
-                    if ($newStatus === 'terminee') {
+                    if ($newStatus === 'livree') {
                         $stmt = $pdo->prepare("UPDATE livraisons SET date_fin = NOW() WHERE id = ?");
                         $stmt->execute([$livraisonId]);
                         $stmt = $pdo->prepare("UPDATE colis SET date_livraison = NOW() WHERE id = ?");
@@ -98,9 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $colisOwner = $stmt->fetch();
                     if ($colisOwner) {
                         // Personnaliser le message selon le type de livraison
-                        if ($newStatus === 'terminee' && !empty($colisInfo['ibox_id'])) {
+                        if ($newStatus === 'livree' && !empty($colisInfo['ibox_id'])) {
                             $notifMessage = "Votre colis a été déposé dans l'iBox " . $colisInfo['code_box'] . " (" . $colisInfo['localisation'] . "). Un code de retrait vous a été envoyé.";
-                        } elseif ($newStatus === 'terminee') {
+                        } elseif ($newStatus === 'livree') {
                             $notifMessage = 'Votre colis a été livré avec succès !';
                         } elseif ($newStatus === 'en_cours') {
                             $notifMessage = 'Votre colis est en cours de livraison.';
@@ -202,7 +205,7 @@ try {
         $stmt = $pdo->query("
             SELECT 
                 COUNT(*) as total,
-                SUM(CASE WHEN l.statut = 'terminee' THEN 1 ELSE 0 END) as livres,
+                SUM(CASE WHEN l.statut = 'livree' THEN 1 ELSE 0 END) as livres,
                 SUM(CASE WHEN l.statut IN ('en_cours', 'assignee') THEN 1 ELSE 0 END) as en_cours,
                 SUM(CASE WHEN l.statut = 'annulee' THEN 1 ELSE 0 END) as annules
             FROM livraisons l
@@ -211,7 +214,7 @@ try {
         $stmt = $pdo->prepare("
             SELECT 
                 COUNT(*) as total,
-                SUM(CASE WHEN l.statut = 'terminee' THEN 1 ELSE 0 END) as livres,
+                SUM(CASE WHEN l.statut = 'livree' THEN 1 ELSE 0 END) as livres,
                 SUM(CASE WHEN l.statut IN ('en_cours', 'assignee') THEN 1 ELSE 0 END) as en_cours,
                 SUM(CASE WHEN l.statut = 'annulee' THEN 1 ELSE 0 END) as annules
             FROM livraisons l

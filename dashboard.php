@@ -165,7 +165,7 @@ if ($user['role'] === 'admin') {
         $stmt = $db->prepare("
             SELECT COUNT(*) as total FROM colis 
             WHERE $agentFilterSql
-            AND statut IN ('livre', 'terminee')
+            AND statut IN ('livre')
         ");
         $stmt->execute($agentFilterParams);
         $result = $stmt->fetch();

@@ -49,7 +49,7 @@ $commissions = $commissionService->getAgentCommissions($agent['id'], null, 20);
 $deliveryStats = $db->prepare("
     SELECT 
         COUNT(*) as total,
-        SUM(CASE WHEN statut = 'terminee' THEN 1 ELSE 0 END) as delivered,
+        SUM(CASE WHEN statut = 'livree' THEN 1 ELSE 0 END) as delivered,
         SUM(CASE WHEN statut = 'annulee' THEN 1 ELSE 0 END) as cancelled,
         AVG(evaluation) as avg_rating,
         AVG(duree_minutes) as avg_time

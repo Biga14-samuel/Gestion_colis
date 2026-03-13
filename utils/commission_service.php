@@ -278,10 +278,11 @@ class CommissionService {
         $stmt = $this->db->prepare("
             SELECT COUNT(*) as count 
             FROM livraisons 
-            WHERE agent_id = ? AND statut = 'terminee'
+            WHERE agent_id = ? AND statut = 'livree'
         ");
         $stmt->execute([$agentId]);
-        $totalDeliveries = $stmt->fetch()['count'];
+        $row = $stmt->fetch();
+        $totalDeliveries = $row ? ($row['count'] ?? 0) : 0;
         
         // Calculer la note moyenne
         $stmt = $this->db->prepare("
@@ -326,7 +327,7 @@ class CommissionService {
         $stmt = $this->db->prepare("
             SELECT 
                 COUNT(*) as total,
-                SUM(CASE WHEN l.statut = 'terminee' THEN 1 ELSE 0 END) as delivered,
+                SUM(CASE WHEN l.statut = 'livree' THEN 1 ELSE 0 END) as delivered,
                 SUM(CASE WHEN l.statut = 'annulee' THEN 1 ELSE 0 END) as cancelled,
                 SUM(l.distance_km) as total_distance,
                 AVG(l.evaluation) as overall_rating

@@ -127,20 +127,28 @@ class MFAService {
     private function verifyBackupCode($userId, $code) {
         $stmt = $this->db->prepare("SELECT mfa_backup_codes FROM utilisateurs WHERE id = ?");
         $stmt->execute([$userId]);
-        $backupCodesHashed = $stmt->fetch()['mfa_backup_codes'];
+        $row = $stmt->fetch();
+        $backupCodesJson = $row ? $row['mfa_backup_codes'] : null;
         
-        if (!$backupCodesHashed) return false;
+        if (!$backupCodesJson) return false;
         
-        $backupCodes = json_decode($backupCodesHashed, true);
+        $backupCodes = json_decode($backupCodesJson, true);
+        if (!is_array($backupCodes)) {
+            return false;
+        }
+
+        $normalizedCode = str_replace(['-', ' '], '', trim((string) $code));
+        if ($normalizedCode === '') {
+            return false;
+        }
         
         foreach ($backupCodes as $index => $backupCode) {
-            if (password_verify($code, $backupCode['hash'])) {
+            if (password_verify($normalizedCode, $backupCode['hash'] ?? '')) {
                 // Supprimer le code utilisé
                 unset($backupCodes[$index]);
-                $newHash = password_hash(json_encode(array_values($backupCodes)), PASSWORD_DEFAULT);
                 
                 $stmt = $this->db->prepare("UPDATE utilisateurs SET mfa_backup_codes = ? WHERE id = ?");
-                $stmt->execute([$newHash, $userId]);
+                $stmt->execute([json_encode(array_values($backupCodes)), $userId]);
                 
                 return true;
             }
@@ -282,7 +290,8 @@ class MFAService {
     public function getRemainingBackupCodesCount($userId) {
         $stmt = $this->db->prepare("SELECT mfa_backup_codes FROM utilisateurs WHERE id = ?");
         $stmt->execute([$userId]);
-        $codes = json_decode($stmt->fetch()['mfa_backup_codes'] ?? '[]', true);
-        return count($codes);
+        $row = $stmt->fetch();
+        $codes = json_decode($row['mfa_backup_codes'] ?? '[]', true);
+        return is_array($codes) ? count($codes) : 0;
     }
 }

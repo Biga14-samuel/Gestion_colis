@@ -337,7 +337,8 @@ class LegalTimestampService {
         
         $stmt = $this->db->prepare("SELECT cle_publique_serveur FROM legal_timestamps WHERE id = ?");
         $stmt->execute([$verification['timestamp_id']]);
-        $cert = $stmt->fetch()['cle_publique_serveur'];
+        $row = $stmt->fetch();
+        $cert = $row ? $row['cle_publique_serveur'] : null;
         
         $certificate = [
             'document_hash' => $documentHash,

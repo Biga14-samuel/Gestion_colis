@@ -49,7 +49,7 @@ $stmt = $db->prepare("
         ag.numero_agent as agent_code
     FROM colis c
     JOIN utilisateurs u ON c.utilisateur_id = u.id
-    LEFT JOIN livraisons l ON c.id = l.colis_id AND l.statut IN ('terminee', 'en_cours')
+    LEFT JOIN livraisons l ON c.id = l.colis_id AND l.statut IN ('livree', 'en_cours')
     LEFT JOIN agents ag ON l.agent_id = ag.id
     WHERE c.id = ?
 ");

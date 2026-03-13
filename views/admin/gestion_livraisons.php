@@ -215,7 +215,7 @@ $statusLabels = [
 $livraisonStatusLabels = [
     'assignee' => 'Assignée',
     'en_cours' => 'En cours',
-    'terminee' => 'Terminée',
+    'livree' => 'Livrée',
     'annulee' => 'Annulée'
 ];
 ?>
@@ -387,7 +387,7 @@ $livraisonStatusLabels = [
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="badge badge-<?= $colis['livraison_statut'] === 'terminee' ? 'success' : ($colis['livraison_statut'] === 'en_cours' ? 'info' : 'secondary') ?>">
+                                        <span class="badge badge-<?= $colis['livraison_statut'] === 'livree' ? 'success' : ($colis['livraison_statut'] === 'en_cours' ? 'info' : 'secondary') ?>">
                                             <?= htmlspecialchars($livraisonStatusLabels[$colis['livraison_statut']] ?? ucfirst($colis['livraison_statut'])) ?>
                                         </span>
                                     </td>
