@@ -16,7 +16,7 @@ if (empty($token)) {
     try {
         $tokenHash = hash('sha256', $token);
         $stmt = $db->prepare("
-            SELECT id, email_verifie
+            SELECT id, email_verifie, email_verification_sent_at
             FROM utilisateurs
             WHERE email_verification_token = ?
             LIMIT 1
@@ -29,6 +29,8 @@ if (empty($token)) {
         } elseif (!empty($user['email_verifie'])) {
             $message = "Votre email est déjà vérifié.";
             $messageType = 'success';
+        } elseif (empty($user['email_verification_sent_at']) || strtotime($user['email_verification_sent_at']) < strtotime('-48 hours')) {
+            $message = "Lien de vérification expiré. Veuillez demander un nouveau lien depuis la page de connexion.";
         } else {
             $db->beginTransaction();
             try {
@@ -52,9 +54,9 @@ if (empty($token)) {
                 $postal = $stmt->fetch();
 
                 if (!$postal) {
-                    $postal_id_code = 'PID' . strtoupper(bin2hex(random_bytes(5)));
+                    $postal_id_code = 'PID' . strtoupper(bin2hex(random_bytes(6)));
                     $qr_data = json_encode([
-                        'user_id' => $user['id'],
+                        'ver' => 1,
                         'code' => $postal_id_code,
                         'created' => date('Y-m-d')
                     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

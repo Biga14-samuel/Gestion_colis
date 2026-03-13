@@ -187,35 +187,74 @@ class MobileMoneyHelper {
             $metaUpdate['raw'] = $raw;
         }
 
-        foreach ($colisRows as $row) {
-            $currentMeta = [];
-            if (!empty($row['payment_metadata'])) {
-                $decoded = json_decode($row['payment_metadata'], true);
-                if (is_array($decoded)) {
-                    $currentMeta = $decoded;
+        $this->db->beginTransaction();
+        try {
+            $updatedAny = false;
+            foreach ($colisRows as $row) {
+                $currentMeta = [];
+                if (!empty($row['payment_metadata'])) {
+                    $decoded = json_decode($row['payment_metadata'], true);
+                    if (is_array($decoded)) {
+                        $currentMeta = $decoded;
+                    }
+                }
+
+                $mergedMeta = array_merge($currentMeta, $metaUpdate);
+
+                $setParts = [];
+                if (!empty($updates)) {
+                    $setParts = array_merge($setParts, $updates);
+                }
+                $setParts[] = "payment_metadata = ?";
+                $setParts[] = "payment_last_error = ?";
+
+                $where = " WHERE id = ?";
+                $params = [
+                    json_encode($mergedMeta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    $internalStatus === 'failed' ? ($reason ?: 'Paiement échoué') : null,
+                    $row['id']
+                ];
+
+                if ($internalStatus === 'paid') {
+                    $where = " WHERE id = ? AND payment_status = 'pending'";
+                } elseif ($internalStatus !== 'paid') {
+                    $where = " WHERE id = ? AND payment_status != 'paid'";
+                }
+
+                $sql = "UPDATE colis SET " . implode(', ', $setParts) . $where;
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute($params);
+
+                if ($stmt->rowCount() === 0) {
+                    continue;
+                }
+
+                $updatedAny = true;
+
+                if (in_array($internalStatus, ['paid', 'failed'], true)) {
+                    $this->syncPaiementRecord($row, $provider, $internalStatus, $transactionId, $providerStatus);
                 }
             }
 
-            $mergedMeta = array_merge($currentMeta, $metaUpdate);
+            $this->db->commit();
 
-            $setParts = [];
-            if (!empty($updates)) {
-                $setParts = array_merge($setParts, $updates);
+            if (!$updatedAny) {
+                return [
+                    'success' => true,
+                    'status' => $internalStatus,
+                    'provider_status' => $providerStatus,
+                    'idempotent' => true,
+                    'colis' => $colisRows
+                ];
             }
-            $setParts[] = "payment_metadata = ?";
-            $setParts[] = "payment_last_error = ?";
-
-            $sql = "UPDATE colis SET " . implode(', ', $setParts) . " WHERE id = ?";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
-                json_encode($mergedMeta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                $internalStatus === 'failed' ? ($reason ?: 'Paiement échoué') : null,
-                $row['id']
-            ]);
-
-            if (in_array($internalStatus, ['paid', 'failed'], true)) {
-                $this->syncPaiementRecord($row, $provider, $internalStatus, $transactionId, $providerStatus);
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
             }
+            return [
+                'success' => false,
+                'message' => $this->safeErrorMessage($e, 'mobile_money.apply', 'Erreur lors de la mise à jour du paiement.')
+            ];
         }
 
         return [

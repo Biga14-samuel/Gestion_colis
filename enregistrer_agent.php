@@ -17,6 +17,18 @@ $db = $database->getConnection();
 $message = '';
 $messageType = '';
 
+// Accès réservé aux administrateurs
+if (!isset($_SESSION['user_id']) || ($_SESSION['user_role'] ?? '') !== 'admin') {
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Accès réservé aux administrateurs.']);
+        exit;
+    }
+    header('HTTP/1.1 403 Forbidden');
+    echo '<div class="access-denied">Accès réservé aux administrateurs.</div>';
+    exit;
+}
+
 function generate_agent_matricule(): string {
     return 'AGT' . strtoupper(bin2hex(random_bytes(4)));
 }
