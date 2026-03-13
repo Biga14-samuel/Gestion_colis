@@ -7,6 +7,7 @@
 require_once __DIR__ . '/utils/session.php';
 SessionManager::start();
 require_once 'config/database.php';
+require_once 'utils/password_policy.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -42,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_profile') {
         $nom = trim($_POST['nom'] ?? '');
         $prenom = trim($_POST['prenom'] ?? '');
-        $tel = trim($_POST['tel'] ?? '');
+        $telephone = trim($_POST['telephone'] ?? '');
         $adresse = trim($_POST['adresse'] ?? '');
         
         if (empty($nom) || empty($prenom)) {
@@ -52,10 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $stmt = $db->prepare("
                     UPDATE utilisateurs 
-                    SET nom = ?, prenom = ?, tel = ?, adresse = ?, date_modification = NOW()
+                    SET nom = ?, prenom = ?, telephone = ?, adresse = ?, date_modification = NOW()
                     WHERE id = ?
                 ");
-                $stmt->execute([$nom, $prenom, $tel, $adresse, $_SESSION['user_id']]);
+                $stmt->execute([$nom, $prenom, $telephone, $adresse, $_SESSION['user_id']]);
                 
                 // Mettre à jour les données en session
                 $_SESSION['user_nom'] = $nom;
@@ -79,23 +80,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!password_verify($current_password, $user['mot_de_passe'])) {
             $message = 'Mot de passe actuel incorrect.';
             $messageType = 'error';
-        } elseif (strlen($new_password) < 8) {
-            $message = 'Le nouveau mot de passe doit contenir au moins 8 caractères.';
-            $messageType = 'error';
-        } elseif ($new_password !== $confirm_password) {
-            $message = 'Les mots de passe ne correspondent pas.';
-            $messageType = 'error';
         } else {
-            try {
-                $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-                $stmt = $db->prepare("UPDATE utilisateurs SET mot_de_passe = ?, date_modification = NOW() WHERE id = ?");
-                $stmt->execute([$hashed_password, $_SESSION['user_id']]);
-                
-                $message = 'Mot de passe modifié avec succès !';
-                $messageType = 'success';
-            } catch (Exception $e) {
-                $message = 'Erreur lors du changement de mot de passe.';
+            $pwErrors = validatePasswordPolicy($new_password);
+            if (!empty($pwErrors)) {
+                $message = $pwErrors[0];
                 $messageType = 'error';
+            } elseif ($new_password !== $confirm_password) {
+                $message = 'Les mots de passe ne correspondent pas.';
+                $messageType = 'error';
+            } else {
+                try {
+                    $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+                    $stmt = $db->prepare("UPDATE utilisateurs SET mot_de_passe = ?, date_modification = NOW() WHERE id = ?");
+                    $stmt->execute([$hashed_password, $_SESSION['user_id']]);
+                    
+                    $message = 'Mot de passe modifié avec succès !';
+                    $messageType = 'success';
+                } catch (Exception $e) {
+                    $message = 'Erreur lors du changement de mot de passe.';
+                    $messageType = 'error';
+                }
             }
         }
     }
@@ -301,11 +305,11 @@ if ($user['role'] === 'admin') {
                         
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="tel">
+                                <label for="telephone">
                                     <i class="fas fa-phone"></i> Téléphone
                                 </label>
-                                <input type="tel" id="tel" name="tel" class="form-control" 
-                                       value="<?= htmlspecialchars($user['tel'] ?? '') ?>" 
+                                <input type="tel" id="telephone" name="telephone" class="form-control" 
+                                       value="<?= htmlspecialchars($user['telephone'] ?? '') ?>" 
                                        placeholder="+225 XX XX XXX XX">
                             </div>
                             <div class="form-group">

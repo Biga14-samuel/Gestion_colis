@@ -8,8 +8,20 @@ $pendingUserId = (int) ($_SESSION['mfa_pending_user_id'] ?? 0);
 $pendingCreated = (int) ($_SESSION['mfa_pending_created_at'] ?? 0);
 $pendingEmail = $_SESSION['mfa_pending_email'] ?? '';
 $ttlSeconds = 600;
+$maxAttempts = 5;
+$lockoutSeconds = 300;
+$now = time();
 
-if ($pendingUserId <= 0 || $pendingCreated <= 0 || (time() - $pendingCreated) > $ttlSeconds) {
+if (!isset($_SESSION['mfa_attempts']) || !is_array($_SESSION['mfa_attempts'])) {
+    $_SESSION['mfa_attempts'] = [];
+}
+$attemptState = $_SESSION['mfa_attempts'][$pendingUserId] ?? [
+    'count' => 0,
+    'first_at' => 0,
+    'locked_until' => 0
+];
+
+if ($pendingUserId <= 0 || $pendingCreated <= 0 || ($now - $pendingCreated) > $ttlSeconds) {
     unset($_SESSION['mfa_pending_user_id'], $_SESSION['mfa_pending_created_at'], $_SESSION['mfa_pending_email']);
     header('Location: login.php');
     exit;
@@ -18,7 +30,7 @@ if ($pendingUserId <= 0 || $pendingCreated <= 0 || (time() - $pendingCreated) > 
 $database = new Database();
 $db = $database->getConnection();
 
-$stmt = $db->prepare("SELECT id, email, prenom, nom, role, theme_preference, mfa_secret, mfa_active, mfa_enabled FROM utilisateurs WHERE id = ? LIMIT 1");
+$stmt = $db->prepare("SELECT id, email, prenom, nom, role, theme_preference, mfa_secret, mfa_active FROM utilisateurs WHERE id = ? LIMIT 1");
 $stmt->execute([$pendingUserId]);
 $user = $stmt->fetch();
 
@@ -28,7 +40,7 @@ if (!$user) {
     exit;
 }
 
-$mfaEnabled = !empty($user['mfa_active']) || !empty($user['mfa_enabled']);
+$mfaEnabled = !empty($user['mfa_active']);
 if (!$mfaEnabled || empty($user['mfa_secret'])) {
     session_regenerate_id(true);
     $_SESSION['user_id'] = $user['id'];
@@ -36,6 +48,7 @@ if (!$mfaEnabled || empty($user['mfa_secret'])) {
     $_SESSION['user_nom'] = $user['nom'];
     $_SESSION['user_prenom'] = $user['prenom'];
     $_SESSION['theme_preference'] = $user['theme_preference'] ?? 'light';
+    unset($_SESSION['mfa_attempts'][$pendingUserId]);
     unset($_SESSION['mfa_pending_user_id'], $_SESSION['mfa_pending_created_at'], $_SESSION['mfa_pending_email']);
     header('Location: dashboard.php');
     exit;
@@ -45,6 +58,13 @@ $message = '';
 $messageType = 'error';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!empty($attemptState['locked_until']) && $attemptState['locked_until'] > $now) {
+        $remaining = $attemptState['locked_until'] - $now;
+        $message = "Trop de tentatives. Réessayez dans {$remaining} seconde(s).";
+    } else {
+        if (!empty($attemptState['locked_until']) && $attemptState['locked_until'] <= $now) {
+            $attemptState = ['count' => 0, 'first_at' => 0, 'locked_until' => 0];
+        }
     $code = trim($_POST['mfa_code'] ?? '');
     if ($code === '') {
         $message = 'Veuillez entrer le code de vérification.';
@@ -58,13 +78,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_nom'] = $user['nom'];
             $_SESSION['user_prenom'] = $user['prenom'];
             $_SESSION['theme_preference'] = $user['theme_preference'] ?? 'light';
+            unset($_SESSION['mfa_attempts'][$pendingUserId]);
             unset($_SESSION['mfa_pending_user_id'], $_SESSION['mfa_pending_created_at'], $_SESSION['mfa_pending_email']);
             header('Location: dashboard.php');
             exit;
         }
 
-        $message = 'Code MFA invalide. Veuillez réessayer.';
+        $attemptState['count'] = (int) ($attemptState['count'] ?? 0) + 1;
+        $attemptState['first_at'] = $attemptState['first_at'] ?: $now;
+        if ($attemptState['count'] >= $maxAttempts) {
+            $attemptState['locked_until'] = $now + $lockoutSeconds;
+            $message = "Trop de tentatives. Réessayez dans {$lockoutSeconds} seconde(s).";
+        } else {
+            $remaining = max(0, $maxAttempts - $attemptState['count']);
+            $message = "Code MFA invalide. Tentatives restantes : {$remaining}.";
+        }
     }
+    }
+    $_SESSION['mfa_attempts'][$pendingUserId] = $attemptState;
 }
 ?>
 <!DOCTYPE html>

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../utils/env_loader.php';
+
 /**
  * Configuration Mobile Money (Orange Money + MTN MoMo)
  * Les valeurs sensibles doivent être injectées via variables d'environnement.

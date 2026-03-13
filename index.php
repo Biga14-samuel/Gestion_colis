@@ -906,7 +906,7 @@ try {
                     <div class="photo-glow-ring"></div>
                     <div class="photo-outer-glow"></div>
                     <div class="photo-frame">
-                        <img src="assets/images/JOSEPH.png" alt="Joseph" class="joseph-photo">
+                        <img src="assets/images/favicon.png" alt="Logo Gestion_Colis" class="joseph-photo">
                     </div>
                     <div class="photo-corner-accent photo-corner-accent-1"></div>
                     <div class="photo-corner-accent photo-corner-accent-2"></div>

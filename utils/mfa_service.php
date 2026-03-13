@@ -56,11 +56,11 @@ class MFAService {
      * Vérifier le code TOTP
      */
     public function verifyCode($userId, $code) {
-        $stmt = $this->db->prepare("SELECT mfa_secret, mfa_active, mfa_enabled FROM utilisateurs WHERE id = ?");
+        $stmt = $this->db->prepare("SELECT mfa_secret, mfa_active FROM utilisateurs WHERE id = ?");
         $stmt->execute([$userId]);
         $user = $stmt->fetch();
 
-        $enabled = !empty($user['mfa_active']) || !empty($user['mfa_enabled']);
+        $enabled = !empty($user['mfa_active']);
         if (!$user || !$enabled || empty($user['mfa_secret'])) {
             return false;
         }

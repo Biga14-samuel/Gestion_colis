@@ -283,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email'])) {
                         rate_limit_clear($db, $ip, '');
                         $error = "Votre email n'est pas vérifié. Un lien de vérification vient de vous être envoyé.";
                     } else {
-                        $mfaEnabled = !empty($user['mfa_active']) || !empty($user['mfa_enabled']);
+                        $mfaEnabled = !empty($user['mfa_active']);
                         $mfaSecret = $user['mfa_secret'] ?? '';
 
                         if ($mfaEnabled && $mfaSecret) {

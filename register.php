@@ -590,16 +590,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nom']) && isset($_POS
                     
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="tel">
+                            <label for="telephone">
                                 <i class="fas fa-phone"></i> Téléphone
                             </label>
                             <input 
                                 type="tel" 
-                                id="tel" 
+                                id="telephone" 
                                 name="telephone" 
                                 placeholder="+237 6 12 34 56 78"
                                 class="form-control"
-                                value="<?php echo htmlspecialchars($_POST['tel'] ?? ''); ?>"
+                                value="<?php echo htmlspecialchars($_POST['telephone'] ?? ''); ?>"
                             >
                         </div>
                         <div class="form-group">

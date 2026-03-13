@@ -20,8 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
     try {
-        $pdo = new PDO(DB_DSN, DB_USER, DB_PASS);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $database = new Database();
+        $pdo = $database->getConnection();
         
         switch ($action) {
             case 'update_status':
@@ -165,8 +165,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Recuperation des livraisons de l'agent
 try {
-    $pdo = new PDO(DB_DSN, DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $database = new Database();
+    $pdo = $database->getConnection();
     
     // Pour admin, voir tous les colis. Pour agent, voir uniquement les siens
     if ($userRole === 'admin') {

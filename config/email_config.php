@@ -33,6 +33,8 @@
  *    - method: 'log'
  */
 
+require_once __DIR__ . '/../utils/env_loader.php';
+
 // Détection automatique du mode
 $isDevelopment = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1']) || 
                  strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false;

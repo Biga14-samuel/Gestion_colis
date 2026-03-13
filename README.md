@@ -11,9 +11,18 @@ Prérequis
 Installation
 
 1. Configurez les variables d’environnement (voir .env.example).
-2. Importez la base initiale via database/gestion_colis.sql ou exécutez php migrations/migrate.php.
-3. Vérifiez les permissions d’écriture sur uploads, logs et keys.
-4. Données de test (optionnel): importer database/seed_data.sql.
+2. Importez la base initiale via database/gestion_colis.sql.
+3. Exécutez les migrations (ordre recommandé) :
+   - php migrations/migrate.php
+   - php migrations/add_advanced_features.php
+   - php migrations/add_email_verification.php
+   - php migrations/add_login_rate_limit.php
+   - php migrations/add_features.php
+   - php migrations/add_mobile_money_fields.php
+   - php migrations/add_stripe_payment_provider.php
+   - php migrations/add_theme_preference.php
+4. Vérifiez les permissions d’écriture sur uploads, logs et keys.
+5. Données de test (optionnel): importer database/seed_data.sql.
 
 Configuration
 
@@ -35,3 +44,4 @@ Sécurité
 
 1. Les répertoires sensibles sont protégés par .htaccess à la racine.
 2. Les uploads sont verrouillés via .htaccess dans uploads/.
+3. Pour déployer, utilisez une archive sans `.git` (ex: `git archive --format=zip HEAD -o gestion_colis_PROD.zip`).

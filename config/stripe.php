@@ -4,6 +4,8 @@
  * Les valeurs sensibles doivent être injectées via variables d'environnement.
  */
 
+require_once __DIR__ . '/../utils/env_loader.php';
+
 if (!defined('STRIPE_ENABLED')) {
     $enabled = getenv('STRIPE_ENABLED');
     define(

@@ -50,21 +50,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $message = 'Ce colis ne peut plus être annulé.';
                         $messageType = 'error';
                     } else {
+                        $db->beginTransaction();
+                        
                         // Supprimer les notifications liees
                         $stmt = $db->prepare("DELETE FROM notifications WHERE type = 'colis' AND message LIKE ?");
                         $stmt->execute(['%colis #' . $colisId . '%']);
                         
-                        // Supprimer le colis directement de la base de données
-                        $stmt = $db->prepare("DELETE FROM colis WHERE id = ?");
+                        // Soft-delete: annuler le colis sans supprimer l'historique
+                        $stmt = $db->prepare("UPDATE colis SET statut = 'annule', date_mise_a_jour = NOW() WHERE id = ?");
                         $stmt->execute([$colisId]);
+
+                        // Journaliser l'action
+                        $stmt = $db->prepare("
+                            INSERT INTO audit_log (utilisateur_id, action, table_affectee, entite_id, ip_address, user_agent)
+                            VALUES (?, 'ANNULER_COLIS', 'colis', ?, ?, ?)
+                        ");
+                        $stmt->execute([
+                            $userId,
+                            $colisId,
+                            $_SERVER['REMOTE_ADDR'] ?? '',
+                            $_SERVER['HTTP_USER_AGENT'] ?? ''
+                        ]);
                         
-                        $message = 'Colis supprimé avec succès.';
+                        $db->commit();
+                        
+                        $message = 'Colis annulé avec succès.';
                         $messageType = 'success';
                     }
                 }
                 break;
         }
     } catch (PDOException $e) {
+        if (isset($db) && $db->inTransaction()) {
+            $db->rollBack();
+        }
         $message = user_error_message($e, 'mes_colis.action', 'Erreur de base de données.');
         $messageType = 'error';
     }

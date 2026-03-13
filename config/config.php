@@ -4,6 +4,8 @@
  * Les valeurs sensibles doivent être injectées via variables d'environnement.
  */
 
+require_once __DIR__ . '/../utils/env_loader.php';
+
 if (!function_exists('env_bool')) {
     function env_bool(string $key, bool $default = false): bool {
         $value = getenv($key);

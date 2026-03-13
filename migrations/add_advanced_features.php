@@ -34,6 +34,7 @@ class MigrationAdvancedFeatures {
         $this->createPickupCodesTable();
         $this->createIboxOperatorsTable();
         $this->createNotificationsPreferencesTable();
+        $this->createPiecesIdentiteTable();
         $this->createArchivesTable();
         
         echo "✅ Migration v2.0 terminée avec succès !\n";
@@ -47,6 +48,7 @@ class MigrationAdvancedFeatures {
         
         $tables = [
             'archives',
+            'pieces_identite',
             'notifications_preferences',
             'ibox_operators',
             'pickup_codes',
@@ -319,14 +321,13 @@ class MigrationAdvancedFeatures {
         CREATE TABLE IF NOT EXISTS notifications_preferences (
             id INT AUTO_INCREMENT PRIMARY KEY,
             utilisateur_id INT NOT NULL,
-            email_enabled BOOLEAN DEFAULT TRUE,
-            sms_enabled BOOLEAN DEFAULT TRUE,
-            push_enabled BOOLEAN DEFAULT TRUE,
-            notification_types JSON,
-            quiet_hours_start TIME DEFAULT '22:00:00',
-            quiet_hours_end TIME DEFAULT '08:00:00',
-            language_preference VARCHAR(10) DEFAULT 'fr',
+            notif_colis TINYINT(1) DEFAULT 1,
+            notif_livraison TINYINT(1) DEFAULT 1,
+            notif_paiement TINYINT(1) DEFAULT 1,
+            notif_email TINYINT(1) DEFAULT 1,
+            notif_sms TINYINT(1) DEFAULT 0,
             date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_notifications_user (utilisateur_id),
             FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ";
@@ -334,6 +335,35 @@ class MigrationAdvancedFeatures {
         try {
             $this->db->exec($sql);
             echo "    ✅ Table notifications_preferences créée\n";
+        } catch (PDOException $e) {
+            echo "    ⚠️ Table déjà existante: " . $e->getMessage() . "\n";
+        }
+    }
+
+    /**
+     * Table des pièces d'identité
+     */
+    private function createPiecesIdentiteTable() {
+        echo "  - Création de la table pieces_identite...\n";
+        
+        $sql = "
+        CREATE TABLE IF NOT EXISTS pieces_identite (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            utilisateur_id INT NOT NULL,
+            type_piece VARCHAR(50) NOT NULL,
+            numero_piece VARCHAR(100) NOT NULL,
+            date_expiration DATE NOT NULL,
+            actif TINYINT(1) DEFAULT 1,
+            date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_pieces_user (utilisateur_id),
+            FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ";
+        
+        try {
+            $this->db->exec($sql);
+            echo "    ✅ Table pieces_identite créée\n";
         } catch (PDOException $e) {
             echo "    ⚠️ Table déjà existante: " . $e->getMessage() . "\n";
         }

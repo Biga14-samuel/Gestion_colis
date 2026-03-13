@@ -407,12 +407,12 @@ class PickupCodeService {
         }
         
         // SMS
-        if ($user['tel']) {
+        if ($user['telephone']) {
             $message = "Votre colis {$parcel['code_tracking']} est pret. ";
             $message .= "Code de retrait: {$pin}. ";
             $message .= "Retirez-le dans l'iBox {$parcel['code_box']}";
             
-            $this->notificationService->sendSMS($user['tel'], $message);
+            $this->notificationService->sendSMS($user['telephone'], $message);
         }
         
         // Notification in-app

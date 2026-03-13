@@ -75,9 +75,9 @@ class NotificationService {
         }
         
         // Notification SMS
-        if ($user['tel']) {
+        if ($user['telephone']) {
             $notifications['sms'] = $this->sendSMS(
-                $user['tel'],
+                $user['telephone'],
                 "Votre colis {$parcel['code_tracking']} est pret. Code de retrait: {$pickupCode}. Retirez-le dans l'iBox {$parcel['localisation']}"
             );
         }

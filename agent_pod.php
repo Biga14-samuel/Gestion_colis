@@ -26,6 +26,11 @@ if (!$user_id) {
     echo '<div class="access-denied">Accès refusé. Veuillez vous connecter.</div>';
     exit;
 }
+if (!in_array($user_role, ['agent', 'admin'], true)) {
+    header('HTTP/1.1 403 Forbidden');
+    echo '<div class="access-denied">Accès réservé aux agents.</div>';
+    exit;
+}
 
 // Récupérer les informations de l'agent
 $stmt = $db->prepare("SELECT * FROM agents WHERE utilisateur_id = ?");

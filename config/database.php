@@ -6,6 +6,8 @@
  * =====================================================
  */
 
+require_once __DIR__ . '/../utils/env_loader.php';
+
 function is_development_env(): bool {
     $appEnv = strtolower((string) getenv('APP_ENV'));
     if (in_array($appEnv, ['dev', 'development', 'local'], true)) {

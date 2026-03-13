@@ -404,6 +404,9 @@ CREATE TABLE `utilisateurs` (
   `email_verified_at` datetime DEFAULT NULL,
   `theme_preference` enum('light','dark') NOT NULL DEFAULT 'light',
   `mfa_active` tinyint(1) DEFAULT 0,
+  `mfa_secret` varchar(100) DEFAULT NULL,
+  `mfa_backup_codes` json DEFAULT NULL,
+  `mfa_verified_at` datetime DEFAULT NULL,
   `date_creation` timestamp NOT NULL DEFAULT current_timestamp(),
   `date_modification` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `zone_livraison` varchar(100) DEFAULT NULL,
@@ -412,6 +415,40 @@ CREATE TABLE `utilisateurs` (
 
 --
 --
+
+-- --------------------------------------------------------
+
+--
+-- Structure de la table `notifications_preferences`
+--
+
+CREATE TABLE `notifications_preferences` (
+  `id` int(11) NOT NULL,
+  `utilisateur_id` int(11) NOT NULL,
+  `notif_colis` tinyint(1) DEFAULT 1,
+  `notif_livraison` tinyint(1) DEFAULT 1,
+  `notif_paiement` tinyint(1) DEFAULT 1,
+  `notif_email` tinyint(1) DEFAULT 1,
+  `notif_sms` tinyint(1) DEFAULT 0,
+  `date_modification` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Structure de la table `pieces_identite`
+--
+
+CREATE TABLE `pieces_identite` (
+  `id` int(11) NOT NULL,
+  `utilisateur_id` int(11) NOT NULL,
+  `type_piece` varchar(50) NOT NULL,
+  `numero_piece` varchar(100) NOT NULL,
+  `date_expiration` date NOT NULL,
+  `actif` tinyint(1) DEFAULT 1,
+  `date_creation` timestamp NOT NULL DEFAULT current_timestamp(),
+  `date_modification` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
 --
@@ -558,6 +595,21 @@ ALTER TABLE `utilisateurs`
   ADD KEY `idx_role` (`role`);
 
 --
+-- Index pour la table `notifications_preferences`
+--
+ALTER TABLE `notifications_preferences`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_notifications_user` (`utilisateur_id`),
+  ADD KEY `idx_notifications_user` (`utilisateur_id`);
+
+--
+-- Index pour la table `pieces_identite`
+--
+ALTER TABLE `pieces_identite`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_pieces_user` (`utilisateur_id`);
+
+--
 -- AUTO_INCREMENT pour les tables déchargées
 --
 
@@ -664,6 +716,18 @@ ALTER TABLE `utilisateurs`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
+-- AUTO_INCREMENT pour la table `notifications_preferences`
+--
+ALTER TABLE `notifications_preferences`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT pour la table `pieces_identite`
+--
+ALTER TABLE `pieces_identite`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- Contraintes pour les tables déchargées
 --
 
@@ -733,6 +797,18 @@ ALTER TABLE `livraisons`
 --
 ALTER TABLE `notifications`
   ADD CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE;
+
+--
+-- Contraintes pour la table `notifications_preferences`
+--
+ALTER TABLE `notifications_preferences`
+  ADD CONSTRAINT `notifications_preferences_ibfk_1` FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE;
+
+--
+-- Contraintes pour la table `pieces_identite`
+--
+ALTER TABLE `pieces_identite`
+  ADD CONSTRAINT `pieces_identite_ibfk_1` FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE;
 
 --
 -- Contraintes pour la table `paiements`
