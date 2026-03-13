@@ -1,0 +1,16 @@
+Options -Indexes
+ServerSignature Off
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^\. - [F,L]
+    RewriteRule ^(config|utils|migrations|database|docs|keys|logs|cron)/ - [F,L]
+</IfModule>
+
+<IfModule mod_alias.c>
+    RedirectMatch 403 ^/(keys|logs|docs)/
+</IfModule>
+
+<FilesMatch "(^\\.|\\.env|composer\\.(json|lock)|phpunit\\.xml|\\.(sql|log|key|crt))$">
+    Require all denied
+</FilesMatch>

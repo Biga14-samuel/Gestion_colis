@@ -1,0 +1,112 @@
+/* =====================================================
+   GESTION_COLIS - VARIABLES CSS
+   Charte Graphique - THÈME CLAIR
+   ===================================================== */
+
+:root {
+    /* Palette de Couleurs Principale */
+    --tech-cyan: #00B4D8;
+    --tech-blue: #0096C7;
+    --tech-purple: #7C3AED;
+    
+    /* Couleurs de Fond - THÈME CLAIR */
+    --white: #FFFFFF;
+    --gray-50: #F8FAFC;
+    --gray-100: #F1F5F9;
+    --gray-200: #E2E8F0;
+    --gray-300: #CBD5E1;
+    
+    /* Couleurs de Texte - THÈME CLAIR */
+    --text-primary: #1E293B;
+    --text-secondary: #475569;
+    --text-muted: #64748B;
+    
+    /* Couleurs Fonctionnelles */
+    --success: #10B981;
+    --warning: #F59E0B;
+    --error: #EF4444;
+    --info: #3B82F6;
+    
+    /* Effets et Ombres */
+    --glow-cyan: rgba(0, 180, 216, 0.15);
+    --glow-cyan-strong: rgba(0, 180, 216, 0.3);
+    --glow-success: rgba(16, 185, 129, 0.15);
+    --glow-error: rgba(239, 68, 68, 0.15);
+    --border-color: rgba(0, 180, 216, 0.25);
+    
+    /* Typographie */
+    --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-display: 'Poppins', sans-serif;
+    
+    /* Espacements */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+    
+    /* Rayons de Bordure */
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-full: 9999px;
+    
+    /* Transitions */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+    
+    /* Largeur des Conteneurs */
+    --max-width-form: 500px;
+    --max-width-card: 400px;
+    --sidebar-width: 280px;
+    --sidebar-width-collapsed: 70px;
+    
+    /* Hauteurs */
+    --header-height: 80px;
+    
+    /* Variables de thème actif (clair par défaut) */
+    --bg-primary: var(--gray-50);
+    --bg-secondary: var(--white);
+    --bg-tertiary: var(--gray-100);
+    --bg-card: var(--white);
+    --bg-sidebar: var(--white);
+
+    /* Dégradés & overlays */
+    --bg-gradient-start: var(--gray-100);
+    --bg-gradient-mid: var(--gray-50);
+    --bg-gradient-end: #f0f9ff;
+    --overlay-bg: rgba(248, 250, 252, 0.95);
+
+    /* Textes sur fonds sombres */
+    --text-on-dark: #E2E8F0;
+    --text-muted-on-dark: #94A3B8;
+}
+
+/* Thème Sombre (configurable) */
+[data-theme="dark"] {
+    --gray-50: #0B1120;
+    --gray-100: #0F172A;
+    --gray-200: #111827;
+    --gray-300: #1F2937;
+
+    --text-primary: #E2E8F0;
+    --text-secondary: #CBD5E1;
+    --text-muted: #94A3B8;
+
+    --bg-primary: #0B1120;
+    --bg-secondary: #0F172A;
+    --bg-tertiary: #111827;
+    --bg-card: #0F172A;
+    --bg-sidebar: #0B1120;
+
+    --border-color: rgba(148, 163, 184, 0.25);
+    --glow-cyan: rgba(0, 180, 216, 0.25);
+    --glow-cyan-strong: rgba(0, 180, 216, 0.45);
+
+    --bg-gradient-start: #0B1120;
+    --bg-gradient-mid: #0F172A;
+    --bg-gradient-end: #111827;
+    --overlay-bg: rgba(2, 6, 23, 0.9);
+}

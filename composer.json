@@ -1,0 +1,19 @@
+{
+  "name": "gestion-colis/app",
+  "description": "Plateforme de gestion de colis",
+  "type": "project",
+  "require": {
+    "php": ">=8.0",
+    "ext-pdo": "*",
+    "ext-openssl": "*",
+    "ext-curl": "*",
+    "ext-json": "*"
+  },
+  "suggest": {
+    "stripe/stripe-php": "SDK Stripe officiel",
+    "endroid/qr-code": "Génération locale de QR codes"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
