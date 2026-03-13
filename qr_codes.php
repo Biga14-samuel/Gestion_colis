@@ -6,6 +6,7 @@
 require_once __DIR__ . '/utils/session.php';
 SessionManager::start();
 require_once 'config/database.php';
+require_once __DIR__ . '/utils/notification_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -43,7 +44,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'regenerate_postal_qr') {
         $stmt = $db->prepare("UPDATE postal_id SET postal_code = ? WHERE id = ?");
         $stmt->execute([$new_code, $postal['id']]);
         
-        createNotification($user_id, 'security', 'QR Code Postal ID régénéré', 
+        createNotification($db, $user_id, 'security', 'QR Code Postal ID régénéré', 
             'Votre code Postal ID a été régénéré. L\'ancien n\'est plus valide.');
         
         $message = 'QR Code Postal ID régénéré avec succès.';
@@ -100,27 +101,10 @@ function generateQRContent($type, $data) {
     }
 }
 
-// Créer une notification
-function createNotification($userId, $type, $title, $message) {
-    $database = new Database();
-    $db = $database->getConnection();
-
-    $allowedTypes = ['colis', 'livraison', 'paiement', 'system', 'security'];
-    if (!in_array($type, $allowedTypes, true)) {
-        $type = 'system';
-    }
-    
-    $stmt = $db->prepare("
-        INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi) 
-        VALUES (?, ?, ?, ?, 'normal', NOW())
-    ");
-    $stmt->execute([$userId, $type, $title, $message]);
-}
-
 // Obtenir le QR code via API externe
 function getQRCodeUrl($content, $size = 200) {
     $encoded = urlencode($content);
-    return "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$$size}&data={$encoded}";
+    return "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data={$encoded}";
 }
 ?>
 

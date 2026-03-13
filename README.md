@@ -12,7 +12,8 @@ Installation
 
 1. Configurez les variables d’environnement (voir .env.example).
 2. Importez la base initiale via database/gestion_colis.sql.
-3. Exécutez les migrations (ordre recommandé) :
+3. Installez les dépendances PHP : `composer install`.
+4. Exécutez les migrations (ordre recommandé) :
    - php migrations/migrate.php
    - php migrations/add_advanced_features.php
    - php migrations/add_email_verification.php
@@ -21,8 +22,8 @@ Installation
    - php migrations/add_mobile_money_fields.php
    - php migrations/add_stripe_payment_provider.php
    - php migrations/add_theme_preference.php
-4. Vérifiez les permissions d’écriture sur uploads, logs et keys.
-5. Données de test (optionnel): importer database/seed_data.sql.
+5. Vérifiez les permissions d’écriture sur uploads, logs et keys.
+6. Données de test (optionnel): importer database/seed_data.sql.
 
 Configuration
 

@@ -9,6 +9,7 @@
 require_once __DIR__ . '/utils/session.php';
 SessionManager::start();
 require_once 'config/database.php';
+require_once __DIR__ . '/utils/notification_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -16,7 +17,8 @@ $db = $database->getConnection();
 $user_id = $_SESSION['user_id'] ?? 0;
 $message = '';
 $messageType = '';
-$signatureOtpTtlSeconds = 10 * 60;
+$signatureOtpTtlSeconds = 5 * 60;
+$signatureOtpMaxAttempts = 3;
 
 // Vérifier la connexion
 if (!$user_id) {
@@ -59,23 +61,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($signature_level === 'advanced') {
                     // Vérifier l'OTP
                     $otp = trim($_POST['otp'] ?? '');
-                    $storedOtp = $_SESSION['signature_otp'] ?? '';
-                    $expiresAt = (int) ($_SESSION['signature_otp_expires_at'] ?? 0);
-                    
+                    $otpData = $_SESSION['signature_otp'] ?? null;
+                    $expiresAt = is_array($otpData) ? (int) ($otpData['expires'] ?? 0) : 0;
+                    $attempts = is_array($otpData) ? (int) ($otpData['attempts'] ?? 0) : 0;
+                    $storedOtp = is_array($otpData) ? (string) ($otpData['code'] ?? '') : '';
+
                     if ($storedOtp === '' || $expiresAt === 0) {
                         $message = 'Code OTP expiré. Veuillez en demander un nouveau.';
                         $messageType = 'error';
                     } elseif (time() > $expiresAt) {
-                        unset($_SESSION['signature_otp'], $_SESSION['signature_otp_expires_at']);
+                        unset($_SESSION['signature_otp']);
                         $message = 'Code OTP expiré. Veuillez en demander un nouveau.';
                         $messageType = 'error';
+                    } elseif ($attempts >= $signatureOtpMaxAttempts) {
+                        unset($_SESSION['signature_otp']);
+                        $message = 'Trop de tentatives. Veuillez générer un nouveau code.';
+                        $messageType = 'error';
                     } elseif (!hash_equals($storedOtp, $otp)) {
+                        $_SESSION['signature_otp']['attempts'] = $attempts + 1;
                         $message = 'Code OTP invalide.';
                         $messageType = 'error';
                     } else {
                         // OTP valide, enregistrer la signature
                         saveSignature($db, $user_id, $signature_level, $signature_data, $document_hash, $document_name);
-                        unset($_SESSION['signature_otp'], $_SESSION['signature_otp_expires_at']);
+                        unset($_SESSION['signature_otp']);
                         $message = 'Signature avancée enregistrée avec succès !';
                         $messageType = 'success';
                     }
@@ -119,17 +128,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'send_otp') {
         // Générer et envoyer OTP pour signature avancée
         $otp = generateOTP();
-        $_SESSION['signature_otp'] = $otp;
-        $_SESSION['signature_otp_expires_at'] = time() + $signatureOtpTtlSeconds;
+        $_SESSION['signature_otp'] = [
+            'code' => $otp,
+            'expires' => time() + $signatureOtpTtlSeconds,
+            'attempts' => 0
+        ];
         
         // Simuler l'envoi SMS (dans un vrai système, utiliser Twilio ou autre)
         $phone = $user['telephone'] ?? '';
         if (!empty($phone)) {
-            createNotification($user_id, 'security', 'Code OTP de signature', 
+            createNotification($db, $user_id, 'security', 'Code OTP de signature', 
                 "Votre code OTP pour signature avancée est: $otp");
             $message = 'Code OTP envoyé par SMS.';
         } else {
-            createNotification($user_id, 'security', 'Code OTP de signature', 
+            createNotification($db, $user_id, 'security', 'Code OTP de signature', 
                 "Votre code OTP pour signature avancée est: $otp");
             $message = 'Code OTP généré (aucun téléphone enregistré, code affiché dans les notifications).';
         }
@@ -167,18 +179,6 @@ function generateOTP() {
     return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 }
 
-function createNotification($userId, $type, $title, $message) {
-    global $db;
-    $allowedTypes = ['colis', 'livraison', 'paiement', 'system', 'security'];
-    if (!in_array($type, $allowedTypes, true)) {
-        $type = 'system';
-    }
-    $stmt = $db->prepare("
-        INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi) 
-        VALUES (?, ?, ?, ?, 'normal', NOW())
-    ");
-    $stmt->execute([$userId, $type, $title, $message]);
-}
 ?>
 
 <div id="page-content">

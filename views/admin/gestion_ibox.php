@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 $code_box    = 'BOX' . strtoupper(bin2hex(random_bytes(4)));
-                $code_acces  = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+                $code_acces  = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
                 $capacite_map = ['small' => 5, 'medium' => 10, 'large' => 20, 'xlarge' => 50];
                 $capacite_max = $capacite_map[$type_box] ?? 10;
 

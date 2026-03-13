@@ -57,7 +57,15 @@ $stmt->execute([(int) $signature['utilisateur_id']]);
 $user = $stmt->fetch();
 
 // Générer le certificat PDF
-require_once 'utils/tcpdf/tcpdf.php';
+$autoload = __DIR__ . '/vendor/autoload.php';
+$tcpdfPath = __DIR__ . '/vendor/tecnickcom/tcpdf/tcpdf.php';
+if (!file_exists($autoload) || !file_exists($tcpdfPath)) {
+    header('HTTP/1.1 500 Internal Server Error');
+    echo 'Dépendance PDF manquante. Veuillez installer TCPDF via Composer.';
+    exit;
+}
+require_once $autoload;
+require_once $tcpdfPath;
 
 // Créer le PDF
 $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);

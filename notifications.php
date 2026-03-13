@@ -55,35 +55,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     if ($action === 'update_preferences') {
-        $email_notifications = isset($_POST['email_notifications']) ? 1 : 0;
-        $sms_notifications = isset($_POST['sms_notifications']) ? 1 : 0;
-        $push_notifications = isset($_POST['push_notifications']) ? 1 : 0;
-        $delivery_alerts = isset($_POST['delivery_alerts']) ? 1 : 0;
-        $promotional_alerts = isset($_POST['promotional_alerts']) ? 1 : 0;
+        $notif_colis = isset($_POST['notif_colis']) ? 1 : 0;
+        $notif_livraison = isset($_POST['notif_livraison']) ? 1 : 0;
+        $notif_paiement = isset($_POST['notif_paiement']) ? 1 : 0;
+        $notif_email = isset($_POST['notif_email']) ? 1 : 0;
+        $notif_sms = isset($_POST['notif_sms']) ? 1 : 0;
         
         // Vérifier si les préférences existent
-        $stmt = $db->prepare("SELECT id FROM notification_preferences WHERE user_id = ?");
+        $stmt = $db->prepare("SELECT id FROM notifications_preferences WHERE utilisateur_id = ?");
         $stmt->execute([$user_id]);
         
         if ($stmt->fetch()) {
             $stmt = $db->prepare("
-                UPDATE notification_preferences SET
-                    email_notifications = ?,
-                    sms_notifications = ?,
-                    push_notifications = ?,
-                    delivery_alerts = ?,
-                    promotional_alerts = ?
-                WHERE user_id = ?
+                UPDATE notifications_preferences SET
+                    notif_colis = ?,
+                    notif_livraison = ?,
+                    notif_paiement = ?,
+                    notif_email = ?,
+                    notif_sms = ?
+                WHERE utilisateur_id = ?
             ");
-            $stmt->execute([$email_notifications, $sms_notifications, $push_notifications, $delivery_alerts, $promotional_alerts, $user_id]);
+            $stmt->execute([$notif_colis, $notif_livraison, $notif_paiement, $notif_email, $notif_sms, $user_id]);
         } else {
             $stmt = $db->prepare("
-                INSERT INTO notification_preferences (
-                    user_id, email_notifications, sms_notifications, 
-                    push_notifications, delivery_alerts, promotional_alerts
+                INSERT INTO notifications_preferences (
+                    utilisateur_id, notif_colis, notif_livraison,
+                    notif_paiement, notif_email, notif_sms
                 ) VALUES (?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$user_id, $email_notifications, $sms_notifications, $push_notifications, $delivery_alerts, $promotional_alerts]);
+            $stmt->execute([$user_id, $notif_colis, $notif_livraison, $notif_paiement, $notif_email, $notif_sms]);
         }
         
         $message = 'Préférences de notifications mises à jour.';
@@ -92,14 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Récupérer les préférences de l'utilisateur
-$stmt = $db->prepare("SELECT * FROM notification_preferences WHERE user_id = ?");
+$stmt = $db->prepare("SELECT * FROM notifications_preferences WHERE utilisateur_id = ?");
 $stmt->execute([$user_id]);
 $preferences = $stmt->fetch() ?: [
-    'email_notifications' => 1,
-    'sms_notifications' => 0,
-    'push_notifications' => 0,
-    'delivery_alerts' => 1,
-    'promotional_alerts' => 0
+    'notif_colis' => 1,
+    'notif_livraison' => 1,
+    'notif_paiement' => 1,
+    'notif_email' => 1,
+    'notif_sms' => 0
 ];
 
 // Récupérer les notifications
@@ -276,8 +276,8 @@ $typeIcons = [
                         <h4><i class="fas fa-envelope"></i> Canaux de notification</h4>
                         
                         <label class="checkbox-card">
-                            <input type="checkbox" name="email_notifications" value="1" 
-                                   <?= $preferences['email_notifications'] ? 'checked' : '' ?>>
+                            <input type="checkbox" name="notif_email" value="1" 
+                                   <?= $preferences['notif_email'] ? 'checked' : '' ?>>
                             <div class="checkbox-content">
                                 <span class="checkbox-title">Notifications par email</span>
                                 <span class="checkbox-desc">Recevoir les notifications importantes par email</span>
@@ -285,8 +285,8 @@ $typeIcons = [
                         </label>
                         
                         <label class="checkbox-card">
-                            <input type="checkbox" name="sms_notifications" value="1"
-                                   <?= $preferences['sms_notifications'] ? 'checked' : '' ?>>
+                            <input type="checkbox" name="notif_sms" value="1"
+                                   <?= $preferences['notif_sms'] ? 'checked' : '' ?>>
                             <div class="checkbox-content">
                                 <span class="checkbox-title">Notifications SMS</span>
                                 <span class="checkbox-desc">Recevoir les alertes urgentes par SMS</span>
@@ -294,11 +294,11 @@ $typeIcons = [
                         </label>
                         
                         <label class="checkbox-card">
-                            <input type="checkbox" name="push_notifications" value="1"
-                                   <?= $preferences['push_notifications'] ? 'checked' : '' ?>>
+                            <input type="checkbox" name="notif_colis" value="1"
+                                   <?= $preferences['notif_colis'] ? 'checked' : '' ?>>
                             <div class="checkbox-content">
-                                <span class="checkbox-title">Notifications push</span>
-                                <span class="checkbox-desc">Recevoir les notifications sur votre navigateur</span>
+                                <span class="checkbox-title">Notifications colis</span>
+                                <span class="checkbox-desc">Suivi des colis et mises à jour importantes</span>
                             </div>
                         </label>
                     </div>
@@ -307,8 +307,8 @@ $typeIcons = [
                         <h4><i class="fas fa-tag"></i> Types de notifications</h4>
                         
                         <label class="checkbox-card">
-                            <input type="checkbox" name="delivery_alerts" value="1"
-                                   <?= $preferences['delivery_alerts'] ? 'checked' : '' ?>>
+                            <input type="checkbox" name="notif_livraison" value="1"
+                                   <?= $preferences['notif_livraison'] ? 'checked' : '' ?>>
                             <div class="checkbox-content">
                                 <span class="checkbox-title">Alertes de livraison</span>
                                 <span class="checkbox-desc">Suivi des colis et notifications de livraison</span>
@@ -316,11 +316,11 @@ $typeIcons = [
                         </label>
                         
                         <label class="checkbox-card">
-                            <input type="checkbox" name="promotional_alerts" value="1"
-                                   <?= $preferences['promotional_alerts'] ? 'checked' : '' ?>>
+                            <input type="checkbox" name="notif_paiement" value="1"
+                                   <?= $preferences['notif_paiement'] ? 'checked' : '' ?>>
                             <div class="checkbox-content">
-                                <span class="checkbox-title">Promotions et offres</span>
-                                <span class="checkbox-desc">Recevoir les offres spéciales et promotions</span>
+                                <span class="checkbox-title">Notifications paiement</span>
+                                <span class="checkbox-desc">Statut des paiements et reçus</span>
                             </div>
                         </label>
                     </div>
