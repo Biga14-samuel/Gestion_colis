@@ -44,8 +44,8 @@ $phoneValid = $userPhoneMsisdn !== null;
 $stmt = $db->prepare("
     SELECT c.*, u.prenom, u.nom
     FROM colis c
-    LEFT JOIN utilisateurs u ON c.expediteur_id = u.id
-    WHERE (c.expediteur_id = ? OR c.destinataire_id = ?)
+    LEFT JOIN utilisateurs u ON COALESCE(c.expediteur_id, c.utilisateur_id) = u.id
+    WHERE (COALESCE(c.expediteur_id, c.utilisateur_id) = ? OR c.destinataire_id = ?)
     AND c.payment_status = 'pending'
     AND c.payment_amount > 0
     ORDER BY c.date_creation DESC
@@ -58,8 +58,8 @@ $pending_payments = $stmt->fetchAll();
 $stmt = $db->prepare("
     SELECT c.*, u.prenom, u.nom
     FROM colis c
-    LEFT JOIN utilisateurs u ON c.expediteur_id = u.id
-    WHERE (c.expediteur_id = ? OR c.destinataire_id = ?)
+    LEFT JOIN utilisateurs u ON COALESCE(c.expediteur_id, c.utilisateur_id) = u.id
+    WHERE (COALESCE(c.expediteur_id, c.utilisateur_id) = ? OR c.destinataire_id = ?)
     AND c.payment_status IN ('paid', 'failed', 'refunded')
     ORDER BY c.paid_at DESC
     LIMIT 20
@@ -222,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             SET payment_status = 'cancelled',
                 payment_reference = NULL,
                 payment_provider = NULL
-            WHERE id = ? AND expediteur_id = ?
+            WHERE id = ? AND COALESCE(expediteur_id, utilisateur_id) = ?
         ");
         $stmt->execute([$colis_id, $user_id]);
         

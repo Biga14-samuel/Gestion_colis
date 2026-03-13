@@ -33,8 +33,8 @@ if (!$payment_id) {
 $stmt = $db->prepare("
     SELECT c.*, u.prenom, u.nom, u.email
     FROM colis c
-    LEFT JOIN utilisateurs u ON c.expediteur_id = u.id
-    WHERE c.id = ? AND (c.expediteur_id = ? OR c.destinataire_id = ?)
+    LEFT JOIN utilisateurs u ON COALESCE(c.expediteur_id, c.utilisateur_id) = u.id
+    WHERE c.id = ? AND (COALESCE(c.expediteur_id, c.utilisateur_id) = ? OR c.destinataire_id = ?)
 ");
 $stmt->execute([$payment_id, $user_id, $user_id]);
 $payment = $stmt->fetch();
