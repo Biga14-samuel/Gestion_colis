@@ -3,7 +3,8 @@
  * Page de statistiques pour l'administrateur
  */
 
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 
 // Vérifier si l'utilisateur est connecté et est admin
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {

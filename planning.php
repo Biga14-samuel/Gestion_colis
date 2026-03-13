@@ -3,7 +3,8 @@
  * Page de planification pour les agents de livraison
  */
 
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 
 // Vérifier si l'utilisateur est connecté et est un agent
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['user_role'], ['agent', 'admin'])) {

@@ -4,7 +4,8 @@
  * Point d'entrée autonome pour récupérer les détails de livraison
  */
 
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 require_once 'config/database.php';
 
 $database = new Database();

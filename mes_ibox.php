@@ -5,7 +5,8 @@
  * La création d'iBox est réservée aux administrateurs
  * =====================================================
  */
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 require_once 'config/database.php';
 
 if (!isset($_SESSION['user_id'])) {

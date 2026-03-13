@@ -4,7 +4,8 @@
  * Permet aux agents de livrer des colis avec photo et signature
  */
 
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 require_once 'config/database.php';
 
 $database = new Database();
@@ -74,27 +75,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Gérer l'upload de la photo
         $proof_photo_path = null;
+        $photoError = null;
         if (!empty($_POST['proof_photo'])) {
             // PhotoBase64
-            $photoData = $_POST['proof_photo'];
+            $photoData = trim($_POST['proof_photo']);
             $uploadDir = 'uploads/photos/';
-            
+
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0755, true);
             }
-            
-            $filename = 'proof_' . $colis_id . '_' . time() . '.jpg';
-            $filepath = $uploadDir . $filename;
-            
-            // Décoder et sauvegarder l'image
-            $data = explode(',', $photoData);
-            if (count($data) === 2) {
-                file_put_contents($filepath, base64_decode($data[1]));
-                $proof_photo_path = $filepath;
+
+            if (!preg_match('#^data:image/(png|jpeg);base64,#', $photoData)) {
+                $photoError = 'Photo de preuve invalide.';
+            } else {
+                $base64 = substr($photoData, strpos($photoData, ',') + 1);
+                $binary = base64_decode($base64, true);
+
+                if ($binary === false) {
+                    $photoError = 'Photo de preuve invalide.';
+                } else {
+                    $imageInfo = @getimagesizefromstring($binary);
+                    $mime = $imageInfo['mime'] ?? '';
+                    if (!$imageInfo || !in_array($mime, ['image/jpeg', 'image/png'], true)) {
+                        $photoError = 'Photo de preuve invalide.';
+                    } else {
+                        $extension = $mime === 'image/png' ? 'png' : 'jpg';
+                        $filename = 'proof_' . $colis_id . '_' . time() . '.' . $extension;
+                        $filepath = $uploadDir . $filename;
+                        file_put_contents($filepath, $binary);
+                        $proof_photo_path = $filepath;
+                    }
+                }
             }
         }
-        
-        try {
+
+        if ($photoError) {
+            $message = $photoError;
+            $messageType = 'error';
+        } else {
+            try {
             $db->beginTransaction();
             
             // Déterminer le niveau de signature
@@ -175,11 +194,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Recharger les livraisons
             header('Location: agent_pod.php?success=1');
             exit;
-            
-        } catch (Exception $e) {
-            $db->rollBack();
-            $message = user_error_message($e, 'agent_pod.complete_delivery', 'Erreur lors de la livraison. Veuillez réessayer.');
-            $messageType = 'error';
+
+            } catch (Exception $e) {
+                $db->rollBack();
+                $message = user_error_message($e, 'agent_pod.complete_delivery', 'Erreur lors de la livraison. Veuillez réessayer.');
+                $messageType = 'error';
+            }
         }
     }
     

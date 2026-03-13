@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 
 // Destruction complète de la session
 $_SESSION = array();

@@ -6,8 +6,10 @@
  * =====================================================
  */
 
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 require_once 'config/database.php';
+require_once 'utils/password_policy.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -47,8 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (empty($mot_de_passe)) {
         $errors[] = "Le mot de passe est requis";
-    } elseif (strlen($mot_de_passe) < 6) {
-        $errors[] = "Le mot de passe doit contenir au moins 6 caractères";
+    } else {
+        $passwordErrors = validatePasswordPolicy($mot_de_passe);
+        if (!empty($passwordErrors)) {
+            $errors[] = $passwordErrors[0];
+        }
     }
     if ($mot_de_passe !== $mot_de_passe_confirm) {
         $errors[] = "Les mots de passe ne correspondent pas";

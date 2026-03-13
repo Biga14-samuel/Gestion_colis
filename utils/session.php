@@ -52,3 +52,9 @@ function session_enforce_timeout(int $idleSeconds = 1800, int $absoluteSeconds =
     $_SESSION['__session_started_at'] = $startedAt;
     $_SESSION['__last_activity_at'] = $now;
 }
+
+class SessionManager {
+    public static function start(int $idleSeconds = 1800, int $absoluteSeconds = 28800): void {
+        session_enforce_timeout($idleSeconds, $absoluteSeconds);
+    }
+}

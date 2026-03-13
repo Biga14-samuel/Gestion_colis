@@ -7,7 +7,8 @@
  */
 
 // Verification de la connexion
-session_start();
+require_once __DIR__ . '/../../utils/session.php';
+SessionManager::start();
 if (!isset($_SESSION['user_id'])) {
     header('HTTP/1.1 403 Forbidden');
     echo '<div class="access-denied">Accès refusé. Veuillez vous connecter.</div>';

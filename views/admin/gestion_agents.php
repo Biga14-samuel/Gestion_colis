@@ -1,6 +1,7 @@
 <?php
 // Verification de la connexion et des droits d'acces
-session_start();
+require_once __DIR__ . '/../../utils/session.php';
+SessionManager::start();
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
     header('HTTP/1.1 403 Forbidden');
     echo '<div class="access-denied">Accès refusé. Vous devez être administrateur pour accéder à cette page.</div>';

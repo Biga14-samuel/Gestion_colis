@@ -1,6 +1,7 @@
 <?php
 // Verification de la connexion
-session_start();
+require_once __DIR__ . '/../../utils/session.php';
+SessionManager::start();
 if (!isset($_SESSION['user_id'])) {
     header('HTTP/1.1 403 Forbidden');
     echo '<div class="access-denied">Accès refusé. Veuillez vous connecter.</div>';
@@ -88,10 +89,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $messageType !== 'warning') {
             $instructions = trim($_POST['instructions'] ?? '');
             $fragile = isset($_POST['fragile']) ? 1 : 0;
             $urgent = isset($_POST['urgent']) ? 1 : 0;
+            $descLen = function_exists('mb_strlen') ? mb_strlen($description) : strlen($description);
+            $instrLen = function_exists('mb_strlen') ? mb_strlen($instructions) : strlen($instructions);
+            $dimLen = function_exists('mb_strlen') ? mb_strlen($dimensions) : strlen($dimensions);
             
             // Validation
             if (empty($description)) {
                 $message = 'La description est requise.';
+                $messageType = 'error';
+            } elseif ($descLen > 500) {
+                $message = 'La description ne doit pas dépasser 500 caractères.';
+                $messageType = 'error';
+            } elseif ($instrLen > 500) {
+                $message = 'Les instructions ne doivent pas dépasser 500 caractères.';
+                $messageType = 'error';
+            } elseif ($dimLen > 500) {
+                $message = 'Les dimensions ne doivent pas dépasser 500 caractères.';
                 $messageType = 'error';
             } else {
                 // Mettre a jour le colis

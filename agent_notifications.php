@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 
 // Vérifier si l'utilisateur est connecté
 if (!isset($_SESSION['user_id'])) {

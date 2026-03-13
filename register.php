@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 require_once 'config/database.php';
 require_once 'utils/password_policy.php';
 require_once 'utils/email_verification.php';

@@ -40,7 +40,7 @@ define('DB_DSN', 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8
 
 require_once __DIR__ . '/../utils/session.php';
 require_once __DIR__ . '/../utils/csrf.php';
-session_enforce_timeout();
+SessionManager::start();
 if (!defined('CSRF_EXEMPT') || CSRF_EXEMPT !== true) {
     csrf_protect();
 }
@@ -91,6 +91,10 @@ class Database {
     }
     
     public function closeConnection() {
+        $this->conn = null;
+    }
+
+    public function __destruct() {
         $this->conn = null;
     }
 }

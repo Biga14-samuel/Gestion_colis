@@ -1,6 +1,7 @@
 <?php
 // Verification de la connexion et du role agent
-session_start();
+require_once __DIR__ . '/../../utils/session.php';
+SessionManager::start();
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['user_role'], ['agent', 'admin'])) {
     header('HTTP/1.1 403 Forbidden');
     echo '<div class="access-denied">Accès refusé. Vous devez être agent ou administrateur pour accéder à cette page.</div>';

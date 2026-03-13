@@ -5,7 +5,8 @@
  * Correction de l'affichage des agents et améliorations
  * =====================================================
  */
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 // Activer le buffer de sortie pour capturer les erreurs PHP
 ob_start();
 require_once 'config/database.php';
@@ -136,9 +137,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reference_colis'])) {
     $signature_data = isset($_POST['signature_data']) ? $_POST['signature_data'] : '';
     
     $errors = [];
+    $descLen = function_exists('mb_strlen') ? mb_strlen($description) : strlen($description);
+    $instrLen = function_exists('mb_strlen') ? mb_strlen($instructions) : strlen($instructions);
     
     if (empty($reference_colis)) $errors[] = "La référence du colis est requise";
     if (empty($description)) $errors[] = "La description est requise";
+    if ($descLen > 500) $errors[] = "La description ne doit pas dépasser 500 caractères";
+    if ($instrLen > 500) $errors[] = "Les instructions ne doivent pas dépasser 500 caractères";
     // Le poids est renseigné par l'agent lors de la collecte - pas obligatoire pour l'utilisateur
     
     // Récupérer la zone de livraison de l'agent sélectionné et valider l'agent

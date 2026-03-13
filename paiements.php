@@ -4,7 +4,8 @@
  * Gestion des paiements pour les frais de livraison et autres services
  */
 
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 require_once 'config/database.php';
 require_once 'config/mobile_money.php';
 require_once 'config/stripe.php';

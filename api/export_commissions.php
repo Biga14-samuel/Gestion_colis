@@ -4,7 +4,8 @@
  * Gestion_Colis v2.0
  */
 
-session_start();
+require_once __DIR__ . '/../utils/session.php';
+SessionManager::start();
 require_once 'config/database.php';
 require_once 'utils/commission_service.php';
 
@@ -25,19 +26,23 @@ $userStmt = $db->prepare("SELECT role FROM utilisateurs WHERE id = ?");
 $userStmt->execute([$user_id]);
 $user = $userStmt->fetch();
 
-if (!$user || ($user['role'] !== 'agent' && $user['role'] !== 'admin')) {
+$isAdmin = $user && $user['role'] === 'admin';
+
+if (!$user || ($user['role'] !== 'agent' && !$isAdmin)) {
     http_response_code(403);
     exit('Accès refusé');
 }
 
-// Récupérer l'agent
-$agentStmt = $db->prepare("SELECT id FROM agents WHERE utilisateur_id = ?");
-$agentStmt->execute([$user_id]);
-$agent = $agentStmt->fetch();
+if (!$isAdmin) {
+    // Récupérer l'agent
+    $agentStmt = $db->prepare("SELECT id FROM agents WHERE utilisateur_id = ?");
+    $agentStmt->execute([$user_id]);
+    $agent = $agentStmt->fetch();
 
-if (!$agent) {
-    http_response_code(404);
-    exit('Agent non trouvé');
+    if (!$agent) {
+        http_response_code(404);
+        exit('Agent non trouvé');
+    }
 }
 
 // Récupérer les commissions
@@ -49,14 +54,26 @@ $dateFilter = match($period) {
     default => "DATE_SUB(NOW(), INTERVAL 1 MONTH)"
 };
 
-$stmt = $db->prepare("
-    SELECT ac.*, c.code_tracking
-    FROM agent_commissions ac
-    LEFT JOIN colis c ON ac.colis_id = c.id
-    WHERE ac.agent_id = ? AND ac.date_calcul >= {$dateFilter}
-    ORDER BY ac.date_calcul DESC
-");
-$stmt->execute([$agent['id']]);
+$stmt = null;
+if ($isAdmin) {
+    $stmt = $db->prepare("
+        SELECT ac.*, c.code_tracking
+        FROM agent_commissions ac
+        LEFT JOIN colis c ON ac.colis_id = c.id
+        WHERE ac.date_calcul >= {$dateFilter}
+        ORDER BY ac.date_calcul DESC
+    ");
+    $stmt->execute();
+} else {
+    $stmt = $db->prepare("
+        SELECT ac.*, c.code_tracking
+        FROM agent_commissions ac
+        LEFT JOIN colis c ON ac.colis_id = c.id
+        WHERE ac.agent_id = ? AND ac.date_calcul >= {$dateFilter}
+        ORDER BY ac.date_calcul DESC
+    ");
+    $stmt->execute([$agent['id']]);
+}
 $commissions = $stmt->fetchAll();
 
 // Créer le CSV

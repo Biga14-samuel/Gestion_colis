@@ -4,7 +4,8 @@
  * Version corrigée avec support AJAX complet
  */
 
-session_start();
+require_once __DIR__ . '/utils/session.php';
+SessionManager::start();
 
 // Vérifier la connexion AVANT d'inclure la base de données
 if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
@@ -139,12 +140,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'log_action') {
         $ibox_id = $_POST['ibox_id'] ?? 0;
         $action_type = $_POST['action_type'] ?? '';
-        $details = $_POST['details'] ?? '';
-        
-        logIboxAction($db, $ibox_id, $user_id, $action_type, $details);
-        
-        $response['success'] = true;
-        $response['message'] = 'Action enregistrée';
+        $details = trim($_POST['details'] ?? '');
+        $detailsLen = function_exists('mb_strlen') ? mb_strlen($details) : strlen($details);
+
+        if ($detailsLen > 500) {
+            $response['message'] = 'Les détails ne doivent pas dépasser 500 caractères.';
+        } else {
+            logIboxAction($db, $ibox_id, $user_id, $action_type, $details);
+
+            $response['success'] = true;
+            $response['message'] = 'Action enregistrée';
+        }
     }
     
     // Renvoyer la réponse JSON pour les requêtes AJAX
