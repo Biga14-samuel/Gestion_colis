@@ -14,7 +14,7 @@ require_once 'config/database.php';
 $database = new Database();
 $db = $database->getConnection();
 
-$stmt = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?");
+$stmt = $db->prepare("SELECT id, nom, prenom, role, theme_preference FROM utilisateurs WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
 

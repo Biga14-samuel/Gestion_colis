@@ -15,7 +15,7 @@ if (!$user_id) {
     exit;
 }
 
-$userStmt = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?");
+$userStmt = $db->prepare("SELECT id, role FROM utilisateurs WHERE id = ?");
 $userStmt->execute([$user_id]);
 $user = $userStmt->fetch();
 
@@ -24,7 +24,10 @@ if ($user['role'] !== 'agent' && $user['role'] !== 'admin') {
     exit;
 }
 
-$agentStmt = $db->prepare("SELECT * FROM agents WHERE utilisateur_id = ?");
+$agentStmt = $db->prepare("
+    SELECT id, numero_agent, zone_livraison, vehicule_type, total_livraisons, note_moyenne, commission_rate
+    FROM agents WHERE utilisateur_id = ?
+");
 $agentStmt->execute([$user_id]);
 $agent = $agentStmt->fetch();
 

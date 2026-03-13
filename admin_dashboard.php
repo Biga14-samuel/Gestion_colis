@@ -17,7 +17,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$stmt = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?");
+$stmt = $db->prepare("SELECT id, nom, prenom, email, role, theme_preference FROM utilisateurs WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
 
@@ -92,7 +92,7 @@ $livraisons_30d = $stmt->fetchColumn();
 // ============================================
 
 // Derniers utilisateurs inscrits
-$stmt = $db->query("SELECT * FROM utilisateurs ORDER BY date_creation DESC LIMIT 10");
+$stmt = $db->query("SELECT id, nom, prenom, email, role, date_creation FROM utilisateurs ORDER BY date_creation DESC LIMIT 10");
 $recent_users = $stmt->fetchAll();
 
 // Derniers colis créés

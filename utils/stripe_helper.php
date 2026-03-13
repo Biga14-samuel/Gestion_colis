@@ -296,19 +296,61 @@ class StripeHelper {
      * Gérer les webhooks Stripe
      */
     public function handleWebhook($payload, $signature) {
-        if ($this->apiKey === 'sk_test_xxxxx') {
-            return ['success' => false, 'message' => 'Clé API Stripe non configurée'];
+        if ($this->simulate) {
+            return ['success' => true, 'event' => 'simulated'];
         }
-        
+
+        if ($this->webhookSecret === '') {
+            return ['success' => false, 'message' => 'Webhook Stripe non configuré'];
+        }
+
         try {
-            $ch = curl_init('https://api.stripe.com/v1/webhook_endpoints');
-            // Logique de vérification de signature à implémenter avec la bibliothèque officielle
-            return ['success' => true, 'event' => 'received'];
-            
+            $signature = (string) $signature;
+            $payload = (string) $payload;
+
+            $timestamp = null;
+            $signatures = [];
+            foreach (explode(',', $signature) as $part) {
+                $part = trim($part);
+                if (str_starts_with($part, 't=')) {
+                    $timestamp = (int) substr($part, 2);
+                } elseif (str_starts_with($part, 'v1=')) {
+                    $signatures[] = substr($part, 3);
+                }
+            }
+
+            if (!$timestamp || empty($signatures)) {
+                return ['success' => false, 'message' => 'Signature Stripe invalide'];
+            }
+
+            if (abs(time() - $timestamp) > 300) {
+                return ['success' => false, 'message' => 'Signature Stripe expirée'];
+            }
+
+            $signedPayload = $timestamp . '.' . $payload;
+            $expected = hash_hmac('sha256', $signedPayload, $this->webhookSecret);
+
+            $valid = false;
+            foreach ($signatures as $sig) {
+                if (hash_equals($expected, $sig)) {
+                    $valid = true;
+                    break;
+                }
+            }
+
+            if (!$valid) {
+                return ['success' => false, 'message' => 'Signature Stripe invalide'];
+            }
+
+            $event = json_decode($payload, true);
+            $eventType = is_array($event) ? ($event['type'] ?? 'unknown') : 'unknown';
+
+            return ['success' => true, 'event' => $eventType, 'data' => $event];
+
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'message' => $this->safeErrorMessage($e, 'stripe.apply', 'Erreur lors de la mise à jour du paiement.')
+                'message' => $this->safeErrorMessage($e, 'stripe.webhook', 'Erreur lors de la vérification du webhook.')
             ];
         }
     }

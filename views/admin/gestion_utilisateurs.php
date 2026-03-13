@@ -68,10 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id <= 0 || empty($nom) || empty($prenom) || empty($email)) {
                     $ajaxResponse['message'] = 'Données invalides.';
                 } else {
-                            $passwordErrors = PasswordPolicy::validate($mot_de_passe);
-                    if (!empty($passwordErrors)) {
-                        $ajaxResponse['message'] = $passwordErrors[0];
-                        break;
+                    if (!empty($mot_de_passe)) {
+                        $passwordErrors = PasswordPolicy::validate($mot_de_passe);
+                        if (!empty($passwordErrors)) {
+                            $ajaxResponse['message'] = $passwordErrors[0];
+                            break;
+                        }
                     }
                     // Verifier si l'email existe deja (sauf pour cet utilisateur)
                     $stmt = $db->prepare("SELECT id FROM utilisateurs WHERE email = ? AND id != ?");

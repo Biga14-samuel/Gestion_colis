@@ -115,7 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['creer_postal_id'])) {
     $date_expiration = $_POST['date_expiration'] ?? '';
     
     $errors = [];
+    $allowedTypes = ['carte_nationale', 'passeport', 'permis_conduire', 'autre'];
     if (empty($type_piece)) $errors[] = "Le type de pièce est requis";
+    if (!empty($type_piece) && !in_array($type_piece, $allowedTypes, true)) {
+        $errors[] = "Type de pièce invalide";
+    }
     if (empty($numero_piece)) $errors[] = "Le numéro de pièce est requis";
     
     $ajaxResponse = ['success' => false, 'message' => ''];
@@ -137,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['creer_postal_id'])) {
                 // Générer les données QR code
                 $qr_code_data = json_encode([
                     'id' => $identifiant_postal,
-                    'user_id' => $user_id,
+                    'ver' => 1,
                     'created' => date('Y-m-d H:i:s')
                 ]);
                 
