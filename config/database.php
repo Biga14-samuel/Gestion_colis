@@ -20,6 +20,12 @@ function is_development_env(): bool {
 }
 
 $isDev = is_development_env();
+
+if (!$isDev) {
+    ini_set('display_errors', '0');
+    ini_set('display_startup_errors', '0');
+    ini_set('log_errors', '1');
+}
 $envHost = getenv('DB_HOST');
 $envName = getenv('DB_NAME');
 $envUser = getenv('DB_USER');
@@ -59,6 +65,7 @@ class Database {
     private $username = '';
     private $password = '';
     private $conn = null;
+    private $shutdownRegistered = false;
     
     public function __construct() {
         $this->host = DB_HOST;
@@ -85,6 +92,14 @@ class Database {
                 error_log("Erreur de connexion: " . $e->getMessage());
                 die("Erreur de connexion à la base de données. Veuillez vérifier la configuration.");
             }
+        }
+
+        if (!$this->shutdownRegistered) {
+            $this->shutdownRegistered = true;
+            $self = $this;
+            register_shutdown_function(function () use ($self) {
+                $self->closeConnection();
+            });
         }
         
         return $this->conn;

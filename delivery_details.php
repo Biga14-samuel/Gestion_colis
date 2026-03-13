@@ -31,11 +31,13 @@ $stmt = $db->prepare("
     LEFT JOIN utilisateurs u ON c.expediteur_id = u.id
     LEFT JOIN utilisateurs d ON c.destinataire_id = d.id
     LEFT JOIN agents a ON c.agent_id = a.id
-    WHERE c.id = ? AND c.agent_id = (
-        SELECT id FROM agents WHERE utilisateur_id = ?
+    WHERE c.id = ? AND (
+        c.agent_id = ? OR c.agent_id IN (
+            SELECT id FROM agents WHERE utilisateur_id = ?
+        )
     )
 ");
-$stmt->execute([$colis_id, $user_id]);
+$stmt->execute([$colis_id, $user_id, $user_id]);
 $colis = $stmt->fetch();
 
 if (!$colis) {
@@ -131,6 +133,32 @@ $statutLabels = [
         <button type="button" class="btn btn-secondary" onclick="clearPodSignature()">
             <i class="fas fa-eraser"></i> Effacer
         </button>
+    </div>
+</div>
+
+<div class="pod-form-section" id="podOtpSection">
+    <h4><i class="fas fa-shield-alt"></i> Validation OTP (obligatoire)</h4>
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        <div>
+            Un code OTP doit être envoyé au destinataire pour valider la signature avancée.
+        </div>
+    </div>
+    <div class="form-group otp-group">
+        <label for="podOtpCode">
+            Code OTP <span class="required">*</span>
+        </label>
+        <div class="otp-actions">
+            <input type="text" id="podOtpCode" name="pod_otp" class="form-control" 
+                   placeholder="XXXXXX" maxlength="6" pattern="[0-9]{6}">
+            <button type="button" class="btn btn-secondary" onclick="sendPodOtp()">
+                <i class="fas fa-paper-plane"></i> Envoyer
+            </button>
+            <button type="button" class="btn btn-primary" onclick="verifyPodOtp()">
+                <i class="fas fa-check"></i> Vérifier
+            </button>
+        </div>
+        <div id="podOtpStatus" class="otp-status"></div>
     </div>
 </div>
 
@@ -234,5 +262,26 @@ function captureCurrentLocation() {
     display: flex;
     gap: 0.5rem;
     margin-top: 0.5rem;
+}
+
+.otp-actions {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.otp-status {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.otp-status.success {
+    color: #22C55E;
+}
+
+.otp-status.error {
+    color: #EF4444;
 }
 </style>

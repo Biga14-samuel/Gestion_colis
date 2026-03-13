@@ -27,12 +27,57 @@ $rateLimitConfig = [
     ]
 ];
 
-function get_client_ip(): string {
-    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-    if (!is_string($ip) || $ip === '') {
-        return '0.0.0.0';
+function get_trusted_proxies(): array {
+    $raw = getenv('TRUSTED_PROXIES') ?: '';
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
     }
-    return $ip;
+    return array_values(array_filter(array_map('trim', explode(',', $raw))));
+}
+
+function extract_ip_from_forwarded_for(string $header): string {
+    $ips = array_map('trim', explode(',', $header));
+    foreach ($ips as $ip) {
+        if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $ip;
+        }
+    }
+    return '';
+}
+
+function get_client_ip(): string {
+    $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (!is_string($remoteAddr) || $remoteAddr === '') {
+        $remoteAddr = '0.0.0.0';
+    }
+
+    $trustedProxies = get_trusted_proxies();
+    if (!empty($trustedProxies) && in_array($remoteAddr, $trustedProxies, true)) {
+        $candidate = '';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $candidate = extract_ip_from_forwarded_for($_SERVER['HTTP_X_FORWARDED_FOR']);
+        }
+        if ($candidate === '' && !empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+            $cf = $_SERVER['HTTP_CF_CONNECTING_IP'];
+            if (is_string($cf) && filter_var($cf, FILTER_VALIDATE_IP)) {
+                $candidate = $cf;
+            }
+        }
+        if ($candidate === '' && !empty($_SERVER['HTTP_X_REAL_IP'])) {
+            $real = $_SERVER['HTTP_X_REAL_IP'];
+            if (is_string($real) && filter_var($real, FILTER_VALIDATE_IP)) {
+                $candidate = $real;
+            }
+        }
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+
+    if (filter_var($remoteAddr, FILTER_VALIDATE_IP)) {
+        return $remoteAddr;
+    }
+    return '0.0.0.0';
 }
 
 function normalize_email(string $email): string {

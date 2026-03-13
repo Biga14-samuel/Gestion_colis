@@ -16,6 +16,7 @@ $db = $database->getConnection();
 $user_id = $_SESSION['user_id'] ?? 0;
 $message = '';
 $messageType = '';
+$signatureOtpTtlSeconds = 10 * 60;
 
 // Vérifier la connexion
 if (!$user_id) {
@@ -57,16 +58,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Vérifier le niveau de signature
                 if ($signature_level === 'advanced') {
                     // Vérifier l'OTP
-                    $otp = $_POST['otp'] ?? '';
+                    $otp = trim($_POST['otp'] ?? '');
                     $storedOtp = $_SESSION['signature_otp'] ?? '';
+                    $expiresAt = (int) ($_SESSION['signature_otp_expires_at'] ?? 0);
                     
-                    if ($otp !== $storedOtp) {
+                    if ($storedOtp === '' || $expiresAt === 0) {
+                        $message = 'Code OTP expiré. Veuillez en demander un nouveau.';
+                        $messageType = 'error';
+                    } elseif (time() > $expiresAt) {
+                        unset($_SESSION['signature_otp'], $_SESSION['signature_otp_expires_at']);
+                        $message = 'Code OTP expiré. Veuillez en demander un nouveau.';
+                        $messageType = 'error';
+                    } elseif (!hash_equals($storedOtp, $otp)) {
                         $message = 'Code OTP invalide.';
                         $messageType = 'error';
                     } else {
                         // OTP valide, enregistrer la signature
                         saveSignature($db, $user_id, $signature_level, $signature_data, $document_hash, $document_name);
-                        unset($_SESSION['signature_otp']);
+                        unset($_SESSION['signature_otp'], $_SESSION['signature_otp_expires_at']);
                         $message = 'Signature avancée enregistrée avec succès !';
                         $messageType = 'success';
                     }
@@ -111,15 +120,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Générer et envoyer OTP pour signature avancée
         $otp = generateOTP();
         $_SESSION['signature_otp'] = $otp;
+        $_SESSION['signature_otp_expires_at'] = time() + $signatureOtpTtlSeconds;
         
         // Simuler l'envoi SMS (dans un vrai système, utiliser Twilio ou autre)
         $phone = $user['telephone'] ?? '';
         if (!empty($phone)) {
-            createNotification($user_id, 'signature', 'Code OTP de signature', 
+            createNotification($user_id, 'security', 'Code OTP de signature', 
                 "Votre code OTP pour signature avancée est: $otp");
             $message = 'Code OTP envoyé par SMS.';
         } else {
-            createNotification($user_id, 'signature', 'Code OTP de signature', 
+            createNotification($user_id, 'security', 'Code OTP de signature', 
                 "Votre code OTP pour signature avancée est: $otp");
             $message = 'Code OTP généré (aucun téléphone enregistré, code affiché dans les notifications).';
         }
@@ -154,14 +164,18 @@ function saveSignature($db, $userId, $level, $data, $docHash, $docName) {
 }
 
 function generateOTP() {
-    return str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+    return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 }
 
 function createNotification($userId, $type, $title, $message) {
     global $db;
+    $allowedTypes = ['colis', 'livraison', 'paiement', 'system', 'security'];
+    if (!in_array($type, $allowedTypes, true)) {
+        $type = 'system';
+    }
     $stmt = $db->prepare("
-        INSERT INTO notifications (utilisateur_id, type, titre, message, date_envoi) 
-        VALUES (?, ?, ?, ?, NOW())
+        INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi) 
+        VALUES (?, ?, ?, ?, 'normal', NOW())
     ");
     $stmt->execute([$userId, $type, $title, $message]);
 }
@@ -395,10 +409,10 @@ function createNotification($userId, $type, $title, $message) {
                                     <code><?= htmlspecialchars(substr($sig['signature_hash'], 0, 16)) ?>...</code>
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-secondary" onclick="downloadCertificate(<?= $sig['id'] ?>)">
+                                    <button class="btn btn-sm btn-secondary" onclick="downloadCertificate(<?= (int) $sig['id'] ?>, '<?= htmlspecialchars($sig['signature_hash'], ENT_QUOTES, 'UTF-8') ?>')">
                                         <i class="fas fa-file-pdf"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-secondary" onclick="verifySignature(<?= $sig['id'] ?>)">
+                                    <button class="btn btn-sm btn-secondary" onclick="verifySignature(<?= (int) $sig['id'] ?>, '<?= htmlspecialchars($sig['signature_hash'], ENT_QUOTES, 'UTF-8') ?>')">
                                         <i class="fas fa-check-circle"></i>
                                     </button>
                                 </td>
@@ -453,7 +467,19 @@ function createNotification($userId, $type, $title, $message) {
 </div>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 let canvas, ctx;
 let isDrawing = false;
 let lastX = 0;
@@ -585,7 +611,10 @@ function sendOTP() {
         body: formData,
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken }
     })
-    .then(response => response.json())
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             showNotification('Code OTP envoyé !', 'success');
@@ -650,7 +679,10 @@ function saveSignatureDocument() {
         body: formData,
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken }
     })
-    .then(response => response.json())
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             showNotification(data.message || 'Signature enregistrée !', 'success');
@@ -667,12 +699,23 @@ function saveSignatureDocument() {
     });
 }
 
-function downloadCertificate(id) {
-    window.open(`certificate.php?id=${id}`, '_blank');
+function downloadCertificate(id, token) {
+    const params = new URLSearchParams();
+    if (token) {
+        params.set('token', token);
+    } else if (id) {
+        params.set('id', id);
+    }
+    const query = params.toString();
+    window.open(`certificate.php${query ? `?${query}` : ''}`, '_blank');
 }
 
-function verifySignature(id) {
-    window.open(`verify_signature.php?id=${id}`, '_blank');
+function verifySignature(id, token) {
+    const params = new URLSearchParams();
+    if (id) params.set('id', id);
+    if (token) params.set('token', token);
+    const query = params.toString();
+    window.open(`verify_signature.php${query ? `?${query}` : ''}`, '_blank');
 }
 
 console.log('%c🚀 Gestion_Colis - iSignature SPA', 'color: #00B4D8; font-size: 16px; font-weight: bold;');

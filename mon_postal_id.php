@@ -16,6 +16,15 @@ $db = $database->getConnection();
 $user_id = $_SESSION['user_id'];
 $message = '';
 $messageType = '';
+$userEmailVerified = false;
+
+try {
+    $stmt = $db->prepare("SELECT email_verifie FROM utilisateurs WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $userEmailVerified = !empty(($stmt->fetch() ?? [])['email_verifie']);
+} catch (Exception $e) {
+    $userEmailVerified = false;
+}
 
 // Traitement AJAX de l'envoi par email
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['envoyer_email'])) {
@@ -112,6 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['creer_postal_id'])) {
     $ajaxResponse = ['success' => false, 'message' => ''];
     
     if (empty($errors)) {
+        if (!$userEmailVerified) {
+            $ajaxResponse['message'] = "Veuillez vérifier votre email avant de créer un Postal ID.";
+        } else {
         try {
             // Générer un code Postal ID unique
             $identifiant_postal = 'PID' . strtoupper(bin2hex(random_bytes(5)));
@@ -146,6 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['creer_postal_id'])) {
             }
         } catch (Exception $e) {
             $ajaxResponse['message'] = user_error_message($e, 'mon_postal_id.create', "Erreur lors de la création du Postal ID.");
+        }
         }
     } else {
         $ajaxResponse['message'] = implode("<br>", $errors);
@@ -354,7 +367,19 @@ try {
 </div>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 // Soumission du formulaire via AJAX pour le système SPA
 document.getElementById('creerPostalIdForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
@@ -373,7 +398,10 @@ document.getElementById('creerPostalIdForm')?.addEventListener('submit', functio
             'X-CSRF-Token': csrfToken
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             showNotification(data.message, 'success');

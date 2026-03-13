@@ -191,8 +191,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $currency = $apply['colis'][0]['payment_currency'] ?? 'XAF';
                             }
                             $stmt = $db->prepare("
-                                INSERT INTO notifications (user_id, type, title, message)
-                                VALUES (?, 'payment', 'Paiement confirmé', ?)
+                                INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi)
+                                VALUES (?, 'paiement', 'Paiement confirmé', ?, 'normal', NOW())
                             ");
                             $stmt->execute([$user_id, 'Votre paiement de ' . formatAmount($amount, $currency) . ' a été confirmé.']);
 
@@ -283,8 +283,8 @@ if (
                         $currency = $apply['colis'][0]['payment_currency'] ?? 'XAF';
                     }
                     $stmt = $db->prepare("
-                        INSERT INTO notifications (user_id, type, title, message)
-                        VALUES (?, 'payment', 'Paiement confirmé', ?)
+                        INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi)
+                        VALUES (?, 'paiement', 'Paiement confirmé', ?, 'normal', NOW())
                     ");
                     $stmt->execute([$user_id, 'Votre paiement de ' . formatAmount($amount, $currency) . ' a été confirmé.']);
 

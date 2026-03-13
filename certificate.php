@@ -11,27 +11,37 @@ require_once 'config/database.php';
 $database = new Database();
 $db = $database->getConnection();
 
-$user_id = $_SESSION['user_id'] ?? 0;
+$user_id = (int) ($_SESSION['user_id'] ?? 0);
 
-// Vérifier l'accès
-if (!$user_id) {
+// Récupérer l'ID de la signature ou un token public
+$signature_id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+$publicToken = trim($_GET['token'] ?? '');
+
+if ($user_id === 0 && $publicToken === '') {
     header('HTTP/1.1 403 Forbidden');
-    echo 'Accès refusé. Veuillez vous connecter.';
+    echo 'Accès refusé.';
     exit;
 }
 
-// Récupérer l'ID de la signature
-$signature_id = $_GET['id'] ?? 0;
-
-if (!$signature_id) {
+if ($user_id > 0 && $signature_id <= 0 && $publicToken === '') {
     header('HTTP/1.1 400 Bad Request');
     echo 'ID de signature requis.';
     exit;
 }
 
 // Récupérer la signature
-$stmt = $db->prepare("SELECT * FROM signatures WHERE id = ? AND utilisateur_id = ?");
-$stmt->execute([$signature_id, $user_id]);
+if ($publicToken !== '') {
+    if ($signature_id > 0) {
+        $stmt = $db->prepare("SELECT * FROM signatures WHERE id = ? AND signature_hash = ?");
+        $stmt->execute([$signature_id, $publicToken]);
+    } else {
+        $stmt = $db->prepare("SELECT * FROM signatures WHERE signature_hash = ?");
+        $stmt->execute([$publicToken]);
+    }
+} else {
+    $stmt = $db->prepare("SELECT * FROM signatures WHERE id = ? AND utilisateur_id = ?");
+    $stmt->execute([$signature_id, $user_id]);
+}
 $signature = $stmt->fetch();
 
 if (!$signature) {
@@ -39,10 +49,11 @@ if (!$signature) {
     echo 'Signature non trouvée.';
     exit;
 }
+$signature_id = (int) ($signature['id'] ?? $signature_id);
 
 // Récupérer les informations de l'utilisateur
 $stmt = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?");
-$stmt->execute([$user_id]);
+$stmt->execute([(int) $signature['utilisateur_id']]);
 $user = $stmt->fetch();
 
 // Générer le certificat PDF

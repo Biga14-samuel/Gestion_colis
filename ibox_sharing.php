@@ -92,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $ibox = $stmt->fetch();
                         
                         $stmt = $db->prepare("
-                            INSERT INTO notifications (utilisateur_id, type, titre, message, date_envoi)
-                            VALUES (?, 'system', 'Partage iBox', ?, NOW())
+                            INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi)
+                            VALUES (?, 'system', 'Partage iBox', ?, 'normal', NOW())
                         ");
                         $stmt->execute([$shared_with_user_id, 
                             'Une iBox (' . ($ibox['code_box'] ?? '') . ') vous a été partagée.']);
@@ -544,7 +544,19 @@ $active_shares = $stmt->fetchAll();
 </div>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 // Gestion des onglets
 document.querySelectorAll('.share-tabs .tab-btn').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -579,6 +591,7 @@ document.querySelectorAll('.share-form form').forEach(form => {
             }
         })
         .then(response => {
+            refreshCsrfToken(response);
             if (!response.ok) {
                 throw new Error('Erreur réseau: ' + response.status);
             }
@@ -628,7 +641,10 @@ function logIboxAction(iboxId, actionType, details) {
         body: formData,
         headers: { 'X-CSRF-Token': csrfToken }
     })
-    .then(response => response.json())
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             showNotification('Action enregistrée avec succès', 'success');

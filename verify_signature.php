@@ -11,13 +11,19 @@ require_once 'config/database.php';
 $database = new Database();
 $db = $database->getConnection();
 
-$user_id = $_SESSION['user_id'] ?? 0;
+$user_id = (int) ($_SESSION['user_id'] ?? 0);
 
-// Récupérer l'ID de la signature
-$signature_id = $_GET['id'] ?? 0;
+// Récupérer l'ID de la signature ou un token public
+$signature_id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+$publicToken = trim($_GET['token'] ?? '');
+$publicView = $user_id === 0;
 
-if (!$signature_id) {
+if ($user_id > 0 && $signature_id <= 0) {
     die('ID de signature requis.');
+}
+if ($publicView && $publicToken === '') {
+    http_response_code(403);
+    die('Accès refusé.');
 }
 
 // Récupérer la signature
@@ -26,16 +32,31 @@ if ($user_id) {
     $stmt = $db->prepare("SELECT * FROM signatures WHERE id = ? AND utilisateur_id = ?");
     $stmt->execute([$signature_id, $user_id]);
 } else {
-    // Visiteur - récupérer la signature sans vérification de propriété
-    $stmt = $db->prepare("SELECT * FROM signatures WHERE id = ?");
-    $stmt->execute([$signature_id]);
+    // Visiteur - exiger un token opaque (hash) pour l'accès public
+    if ($signature_id > 0) {
+        $stmt = $db->prepare("
+            SELECT id, utilisateur_id, signature_level, signature_data, signature_hash, created_at
+            FROM signatures
+            WHERE id = ? AND signature_hash = ?
+        ");
+        $stmt->execute([$signature_id, $publicToken]);
+    } else {
+        $stmt = $db->prepare("
+            SELECT id, utilisateur_id, signature_level, signature_data, signature_hash, created_at
+            FROM signatures
+            WHERE signature_hash = ?
+        ");
+        $stmt->execute([$publicToken]);
+    }
 }
 
 $signature = $stmt->fetch();
 
 if (!$signature) {
+    http_response_code(404);
     die('Signature non trouvée.');
 }
+$signature_id = (int) ($signature['id'] ?? $signature_id);
 
 // Récupérer les informations de l'utilisateur si disponible
 $user = null;
@@ -45,9 +66,9 @@ if ($user_id) {
     $user = $stmt->fetch();
 }
 
-$verificationResult = verifySignature($signature, $db);
+$verificationResult = verifySignature($signature, $db, $publicView);
 
-function verifySignature($signature, $db) {
+function verifySignature($signature, $db, bool $publicView = false) {
     $result = [
         'valid' => true,
         'message' => 'Signature vérifiée avec succès',
@@ -57,38 +78,40 @@ function verifySignature($signature, $db) {
     // Vérifier l'intégrité du hash
     $expectedHash = hash('sha256', $signature['signature_data'] . $signature['created_at'] . $signature['utilisateur_id']);
     
-    if ($expectedHash !== $signature['signature_hash']) {
+    if (!hash_equals((string) $signature['signature_hash'], (string) $expectedHash)) {
         $result['valid'] = false;
         $result['message'] = 'Attention: L\'intégrité de la signature n\'a pas pu être vérifiée.';
         $result['details'][] = 'Le hash de signature ne correspond pas aux données enregistrées.';
     }
 
-    // Vérifier le niveau de signature
-    $result['details'][] = 'Niveau de signature: ' . ucfirst($signature['signature_level']);
+    if (!$publicView) {
+        // Vérifier le niveau de signature
+        $result['details'][] = 'Niveau de signature: ' . ucfirst($signature['signature_level']);
 
-    // Vérifier la date
-    $signDate = strtotime($signature['created_at']);
-    $now = time();
-    $ageInDays = ($now - $signDate) / (24 * 60 * 60);
-    
-    if ($ageInDays < 1) {
-        $result['details'][] = 'Signée il y a moins d\'un jour';
-    } elseif ($ageInDays < 30) {
-        $result['details'][] = 'Signée il y a ' . floor($ageInDays) . ' jour(s)';
-    } else {
-        $result['details'][] = 'Signée le ' . date('d/m/Y', $signDate);
-    }
+        // Vérifier la date
+        $signDate = strtotime($signature['created_at']);
+        $now = time();
+        $ageInDays = ($now - $signDate) / (24 * 60 * 60);
+        
+        if ($ageInDays < 1) {
+            $result['details'][] = 'Signée il y a moins d\'un jour';
+        } elseif ($ageInDays < 30) {
+            $result['details'][] = 'Signée il y a ' . floor($ageInDays) . ' jour(s)';
+        } else {
+            $result['details'][] = 'Signée le ' . date('d/m/Y', $signDate);
+        }
 
-    // Vérifications spécifiques au niveau
-    if ($signature['signature_level'] === 'qualified') {
-        $result['details'][] = 'Type: Signature qualifiée avec vérification d\'identité';
-        $result['details'][] = 'Valeur probante juridique confirmée';
-    } elseif ($signature['signature_level'] === 'advanced') {
-        $result['details'][] = 'Type: Signature avancée avec validation OTP';
-        $result['details'][] = 'Identité du signataire partiellement vérifiée';
-    } else {
-        $result['details'][] = 'Type: Signature simple';
-        $result['details'][] = 'Preuve de réception basique';
+        // Vérifications spécifiques au niveau
+        if ($signature['signature_level'] === 'qualified') {
+            $result['details'][] = 'Type: Signature qualifiée avec vérification d\'identité';
+            $result['details'][] = 'Valeur probante juridique confirmée';
+        } elseif ($signature['signature_level'] === 'advanced') {
+            $result['details'][] = 'Type: Signature avancée avec validation OTP';
+            $result['details'][] = 'Identité du signataire partiellement vérifiée';
+        } else {
+            $result['details'][] = 'Type: Signature simple';
+            $result['details'][] = 'Preuve de réception basique';
+        }
     }
 
     return $result;
@@ -313,7 +336,7 @@ function verifySignature($signature, $db) {
                         <i class="fas fa-calendar"></i>
                         Signature datée du <?= date('d/m/Y à H:i:s', strtotime($signature['created_at'])) ?>
                     </li>
-                    <?php if (!empty($signature['document_name'])): ?>
+                    <?php if ($user_id && !empty($signature['document_name'])): ?>
                     <li>
                         <i class="fas fa-file"></i>
                         Document: <?= htmlspecialchars($signature['document_name']) ?>
@@ -351,9 +374,11 @@ function verifySignature($signature, $db) {
                 <i class="fas fa-home"></i> Accueil
             </a>
             <?php endif; ?>
-            <a href="certificate.php?id=<?= $signature_id ?>" class="btn btn-secondary" target="_blank">
+            <?php if ($user_id): ?>
+            <a href="certificate.php?token=<?= urlencode($signature['signature_hash']) ?>" class="btn btn-secondary" target="_blank">
                 <i class="fas fa-file-pdf"></i> Télécharger le certificat
             </a>
+            <?php endif; ?>
         </div>
     </div>
 </body>

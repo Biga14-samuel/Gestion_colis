@@ -19,6 +19,17 @@ if (!is_array($payload)) {
 $headers = function_exists('getallheaders') ? getallheaders() : [];
 
 $helper = new MobileMoneyHelper();
+$signatureCheck = $helper->verifyCallbackSignature($provider, $rawBody, $headers);
+if (empty($signatureCheck['success'])) {
+    http_response_code(401);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'message' => $signatureCheck['message'] ?? 'Signature webhook invalide.'
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $result = $helper->handleCallback($provider, $payload, $headers);
 
 if (empty($result['success'])) {

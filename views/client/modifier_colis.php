@@ -130,8 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $messageType !== 'warning') {
                 
                 // Ajouter une notification
                 $stmt = $db->prepare("
-                    INSERT INTO notifications (utilisateur_id, type, titre, message, date_envoi)
-                    VALUES (?, 'colis', 'Colis modifié', ?, NOW())
+                    INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi)
+                    VALUES (?, 'colis', 'Colis modifié', ?, 'normal', NOW())
                 ");
                 $stmt->execute([$userId, 'Votre colis #' . $colisId . ' a été modifié avec succès.']);
                 

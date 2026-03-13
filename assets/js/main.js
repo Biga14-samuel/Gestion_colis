@@ -250,11 +250,43 @@ function initForms() {
 }
 
 function getCsrfToken() {
+    if (window.__CSRF_TOKEN) return window.__CSRF_TOKEN;
     const meta = document.querySelector('meta[name="csrf-token"]');
     if (meta && meta.content) return meta.content;
     const input = document.querySelector('input[name="csrf_token"]');
     return input ? input.value : '';
 }
+
+function setCsrfToken(token) {
+    if (!token) return;
+    window.__CSRF_TOKEN = token;
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) meta.content = token;
+    document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+        input.value = token;
+    });
+}
+
+(function registerCsrfFetchWrapper() {
+    if (!window.fetch) return;
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, init = {}) => {
+        const options = init || {};
+        const method = (options.method || 'GET').toUpperCase();
+        if (method === 'POST') {
+            const headers = new Headers(options.headers || {});
+            const token = getCsrfToken();
+            if (token) {
+                headers.set('X-CSRF-Token', token);
+            }
+            options.headers = headers;
+        }
+        const response = await originalFetch(input, options);
+        const newToken = response.headers.get('X-CSRF-Token');
+        if (newToken) setCsrfToken(newToken);
+        return response;
+    };
+})();
 
 async function submitForm(form) {
     const formData = new FormData(form);

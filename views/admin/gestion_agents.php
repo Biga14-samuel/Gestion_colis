@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($stmt->fetch()) {
                         $ajaxResponse['message'] = 'Cet email ou ce matricule est déjà utilisé.';
                     } else {
-                        $passwordErrors = validatePasswordPolicy($mot_de_passe);
+                        $passwordErrors = PasswordPolicy::validate($mot_de_passe);
                         if (!empty($passwordErrors)) {
                             $ajaxResponse['message'] = $passwordErrors[0];
                         } else {
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $ajaxResponse['message'] = 'Cet email ou ce matricule est déjà utilisé par un autre utilisateur.';
                     } else {
                         if (!empty($mot_de_passe)) {
-                            $passwordErrors = validatePasswordPolicy($mot_de_passe);
+                            $passwordErrors = PasswordPolicy::validate($mot_de_passe);
                             if (!empty($passwordErrors)) {
                                 $ajaxResponse['message'] = $passwordErrors[0];
                                 break;

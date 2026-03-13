@@ -337,7 +337,19 @@ $typeIcons = [
 </div>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 // ==========================================
 // SYSTÈME DE NOTIFICATIONS AJAX - Gestion_Colis
 // ==========================================
@@ -501,7 +513,8 @@ async function markAsRead(notificationId) {
             },
             body: `action=mark_read&notification_id=${notificationId}`
         });
-        
+
+        refreshCsrfToken(response);
         const data = await response.json();
         
         if (data.success) {
@@ -557,7 +570,8 @@ async function markAllAsRead() {
             },
             body: 'action=mark_all_read'
         });
-        
+
+        refreshCsrfToken(response);
         const data = await response.json();
         
         if (data.success) {
@@ -618,7 +632,8 @@ async function deleteNotification(notificationId) {
             },
             body: `action=delete_notification&notification_id=${notificationId}`
         });
-        
+
+        refreshCsrfToken(response);
         const data = await response.json();
         
         if (data.success) {
@@ -891,7 +906,8 @@ function initPreferenceForm() {
                 body: formData,
                 headers: { 'X-CSRF-Token': csrfToken }
             });
-            
+
+            refreshCsrfToken(response);
             const data = await response.json();
             
             if (data.success || !data.error) {

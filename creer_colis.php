@@ -281,28 +281,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reference_colis'])) {
                 if ($ibox_id > 0) {
                     try {
                         require_once 'utils/pickup_code_service.php';
-                        if (class_exists('PickupCodeService')) {
-                            $pickupService = new PickupCodeService();
-                            $pickupResult = $pickupService->generateCode($colis_id, 'pin', false);
-                            $ajaxResponse['pickup_code'] = $pickupResult['code'] ?? null;
+                        $pickupService = new PickupCodeService();
+                        $pickupResult = $pickupService->generateCode($colis_id, 'pin', false);
+                        if (!empty($pickupResult['success']) && !empty($pickupResult['code'])) {
+                            $ajaxResponse['pickup_code'] = $pickupResult['code'];
                         } else {
-                            // Générer un code de retrait simple si le service n'est pas disponible
-                            $codeLength = 6;
-                            try {
-                                $cfg = require 'config/config.php';
-                                if (isset($cfg['pickup_codes']['code_length'])) {
-                                    $codeLength = max(4, (int) $cfg['pickup_codes']['code_length']);
-                                }
-                            } catch (Exception $e) {
-                                $codeLength = 6;
-                            }
-                            $bytes = (int) ceil($codeLength / 2);
-                            $pickup_code = strtoupper(substr(bin2hex(random_bytes($bytes)), 0, $codeLength));
-                            $ajaxResponse['pickup_code'] = $pickup_code;
-                            
-                            // Enregistrer le code manuellement
-                            $stmt_pickup = $db->prepare("INSERT INTO pickup_codes (colis_id, code, type_code, date_expiration) VALUES (?, ?, 'pin', DATE_ADD(NOW(), INTERVAL 30 DAY))");
-                            $stmt_pickup->execute([$colis_id, $pickup_code]);
+                            $ajaxResponse['pickup_code'] = null;
                         }
                         
                         // Mettre à jour le statut de l'iBox à "recu" (contenant un colis)
@@ -623,7 +607,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reference_colis'])) {
 </div>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 // =====================================================
 // SCRIPT DE PAGE - SIGNATURE PAD CORRIGÉ
 // =====================================================
@@ -970,6 +966,7 @@ document.getElementById('creerColisForm').addEventListener('submit', function(e)
         }
     })
     .then(response => {
+        refreshCsrfToken(response);
         console.log('📥 Réponse reçue, status:', response.status);
         
         if (!response.ok) {

@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (empty($nom) || empty($prenom) || empty($email) || empty($mot_de_passe)) {
                     $ajaxResponse['message'] = 'Tous les champs obligatoires doivent être remplis.';
                 } else {
-                    $passwordErrors = validatePasswordPolicy($mot_de_passe);
+                        $passwordErrors = PasswordPolicy::validate($mot_de_passe);
                     if (!empty($passwordErrors)) {
                         $ajaxResponse['message'] = $passwordErrors[0];
                         break;
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id <= 0 || empty($nom) || empty($prenom) || empty($email)) {
                     $ajaxResponse['message'] = 'Données invalides.';
                 } else {
-                    $passwordErrors = validatePasswordPolicy($mot_de_passe);
+                            $passwordErrors = PasswordPolicy::validate($mot_de_passe);
                     if (!empty($passwordErrors)) {
                         $ajaxResponse['message'] = $passwordErrors[0];
                         break;
@@ -551,4 +551,3 @@ document.addEventListener('keydown', function(e) {
 </script>
 
 </div> <!-- Fin #page-content -->
-

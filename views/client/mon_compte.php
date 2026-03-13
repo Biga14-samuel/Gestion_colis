@@ -70,8 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif ($nouveau_mot_de_passe !== $confirmer_mot_de_passe) {
                     $message = 'Les nouveaux mots de passe ne correspondent pas.';
                     $messageType = 'error';
-                } elseif (!empty(validatePasswordPolicy($nouveau_mot_de_passe))) {
-                    $message = validatePasswordPolicy($nouveau_mot_de_passe)[0];
+                } elseif (!empty(PasswordPolicy::validate($nouveau_mot_de_passe))) {
+                    $message = PasswordPolicy::validate($nouveau_mot_de_passe)[0];
                     $messageType = 'error';
                 } else {
                     $nouveau_mot_de_passe_hash = password_hash($nouveau_mot_de_passe, PASSWORD_DEFAULT);

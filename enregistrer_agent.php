@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($mot_de_passe)) {
         $errors[] = "Le mot de passe est requis";
     } else {
-        $passwordErrors = validatePasswordPolicy($mot_de_passe);
+        $passwordErrors = PasswordPolicy::validate($mot_de_passe);
         if (!empty($passwordErrors)) {
             $errors[] = $passwordErrors[0];
         }
@@ -154,8 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Créer une notification pour l'admin
                 try {
                     $stmt_notif = $db->prepare("
-                        INSERT INTO notifications (utilisateur_id, titre, message, type, date_envoi) 
-                        VALUES (?, 'Nouvel agent inscrit', ?, 'info', NOW())
+                        INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi) 
+                        VALUES (?, 'system', 'Nouvel agent inscrit', ?, 'normal', NOW())
                     ");
                     // Trouver un admin
                     $stmt_admin = $db->query("SELECT id FROM utilisateurs WHERE role = 'admin' LIMIT 1");
@@ -438,7 +438,19 @@ try {
 </div>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 // Soumission du formulaire via AJAX pour le système SPA
 document.getElementById('enregistrerAgentForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -461,6 +473,7 @@ document.getElementById('enregistrerAgentForm').addEventListener('submit', funct
         }
     })
     .then(response => {
+        refreshCsrfToken(response);
         console.log('Réponse reçue, status:', response.status);
         
         if (!response.ok) {

@@ -45,6 +45,20 @@ $stats_mensuelles = [];
 $stats_statuts = [];
 $performance = [];
 
+function resolve_agent_id(PDO $db, int $userId): int {
+    try {
+        $stmt = $db->prepare("SELECT id FROM agents WHERE utilisateur_id = ? LIMIT 1");
+        $stmt->execute([$userId]);
+        $agentInfo = $stmt->fetch();
+        if ($agentInfo && !empty($agentInfo['id'])) {
+            return (int) $agentInfo['id'];
+        }
+    } catch (PDOException $e) {
+        // Ignorer: fallback sur userId pour compatibilité legacy
+    }
+    return (int) $userId;
+}
+
 if ($user['role'] === 'admin') {
     try {
         $stmt = $db->query("SELECT COUNT(*) as total FROM utilisateurs");
@@ -82,30 +96,9 @@ if ($user['role'] === 'admin') {
     
 } elseif ($user['role'] === 'agent') {
     // Pour les agents, récupérer les statistiques basées sur les colis
-    // D'abord essayer de trouver l'agent dans la table agents
-    $agent_id = 0;
-    try {
-        $stmt = $db->prepare("SELECT id FROM agents WHERE utilisateur_id = ?");
-        $stmt->execute([$user['id']]);
-        $agent_info = $stmt->fetch();
-        $agent_id = $agent_info['id'] ?? 0;
-    } catch (PDOException $e) {
-        $agent_id = 0;
-    }
-    
-    // Si pas d'agent dans la table agents, utiliser l'ID utilisateur comme agent_id
-    // Cela permet aux utilisateurs enregistrés comme agents dans la table utilisateurs d'avoir des stats
-    if ($agent_id == 0) {
-        // Essayer de trouver par matricule ou zone de livraison
-        try {
-            $stmt = $db->prepare("SELECT id FROM agents WHERE utilisateur_id = ? OR matricule LIKE ?");
-            $stmt->execute([$user['id'], '%' . $user['matricule'] . '%']);
-            $agent_info = $stmt->fetch();
-            $agent_id = $agent_info['id'] ?? $user['id']; // Utiliser user_id comme fallback
-        } catch (PDOException $e) {
-            $agent_id = $user['id'];
-        }
-    }
+    $agent_id = resolve_agent_id($db, (int) $user['id']);
+    $agentFilterSql = "(agent_id = ? OR agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?))";
+    $agentFilterParams = [$agent_id, (int) $user['id']];
     
     // Récupérer les statistiques des livraisons
     // Total des livraisons assignées à cet agent
@@ -114,16 +107,16 @@ if ($user['role'] === 'admin') {
         $stmt = $db->prepare("
             SELECT COUNT(*) as total 
             FROM colis c 
-            WHERE c.agent_id = ? OR c.agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?)
+            WHERE $agentFilterSql
         ");
-        $stmt->execute([$agent_id, $user['id']]);
+        $stmt->execute($agentFilterParams);
         $result = $stmt->fetch();
         $stats['total_livraisons'] = $result['total'] ?? 0;
     } catch (PDOException $e) { 
         // Si la table livraisons n'existe pas, compter directement dans colis
         try {
-            $stmt = $db->prepare("SELECT COUNT(*) as total FROM colis WHERE agent_id = ? OR agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?)");
-            $stmt->execute([$agent_id, $user['id']]);
+            $stmt = $db->prepare("SELECT COUNT(*) as total FROM colis WHERE $agentFilterSql");
+            $stmt->execute($agentFilterParams);
             $result = $stmt->fetch();
             $stats['total_livraisons'] = $result['total'] ?? 0;
         } catch (PDOException $e2) {
@@ -135,10 +128,10 @@ if ($user['role'] === 'admin') {
     try {
         $stmt = $db->prepare("
             SELECT COUNT(*) as total FROM colis 
-            WHERE (agent_id = ? OR agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?))
+            WHERE $agentFilterSql
             AND DATE(date_creation) = CURDATE()
         ");
-        $stmt->execute([$agent_id, $user['id']]);
+        $stmt->execute($agentFilterParams);
         $result = $stmt->fetch();
         $stats['today'] = $result['total'] ?? 0;
     } catch (PDOException $e) { $stats['today'] = 0; }
@@ -147,10 +140,10 @@ if ($user['role'] === 'admin') {
     try {
         $stmt = $db->prepare("
             SELECT COUNT(*) as total FROM colis 
-            WHERE (agent_id = ? OR agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?))
+            WHERE $agentFilterSql
             AND WEEK(date_creation) = WEEK(CURDATE()) AND YEAR(date_creation) = YEAR(CURDATE())
         ");
-        $stmt->execute([$agent_id, $user['id']]);
+        $stmt->execute($agentFilterParams);
         $result = $stmt->fetch();
         $stats['this_week'] = $result['total'] ?? 0;
     } catch (PDOException $e) { $stats['this_week'] = 0; }
@@ -159,10 +152,10 @@ if ($user['role'] === 'admin') {
     try {
         $stmt = $db->prepare("
             SELECT COUNT(*) as total FROM colis 
-            WHERE (agent_id = ? OR agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?))
+            WHERE $agentFilterSql
             AND statut IN ('en_attente', 'en_cours')
         ");
-        $stmt->execute([$agent_id, $user['id']]);
+        $stmt->execute($agentFilterParams);
         $result = $stmt->fetch();
         $stats['pending'] = $result['total'] ?? 0;
     } catch (PDOException $e) { $stats['pending'] = 0; }
@@ -171,10 +164,10 @@ if ($user['role'] === 'admin') {
     try {
         $stmt = $db->prepare("
             SELECT COUNT(*) as total FROM colis 
-            WHERE (agent_id = ? OR agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?))
+            WHERE $agentFilterSql
             AND statut IN ('livre', 'terminee')
         ");
-        $stmt->execute([$agent_id, $user['id']]);
+        $stmt->execute($agentFilterParams);
         $result = $stmt->fetch();
         $stats['delivered'] = $result['total'] ?? 0;
     } catch (PDOException $e) { $stats['delivered'] = 0; }
@@ -184,12 +177,12 @@ if ($user['role'] === 'admin') {
         $stmt = $db->prepare("
             SELECT DATE(date_creation) as date, COUNT(*) as total 
             FROM colis 
-            WHERE (agent_id = ? OR agent_id IN (SELECT id FROM agents WHERE utilisateur_id = ?))
+            WHERE $agentFilterSql
             AND date_creation >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY DATE(date_creation)
             ORDER BY date DESC
         ");
-        $stmt->execute([$agent_id, $user['id']]);
+        $stmt->execute($agentFilterParams);
         $performance = $stmt->fetchAll();
     } catch (PDOException $e) { 
         $performance = [];
@@ -264,6 +257,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php echo csrf_meta_tag(); ?>
     <script>
         (function() {
             const theme = <?php echo json_encode($themePreference); ?>;

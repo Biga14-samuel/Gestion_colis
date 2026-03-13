@@ -104,4 +104,8 @@ function csrf_protect(): void {
 
     // One-time token: invalidate after successful check.
     csrf_invalidate();
+    $newToken = csrf_token();
+    if (!headers_sent()) {
+        header('X-CSRF-Token: ' . $newToken);
+    }
 }

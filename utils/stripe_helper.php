@@ -39,6 +39,14 @@ class StripeHelper {
         $currency = strtoupper(trim($currency));
         return in_array($currency, ['EUR', 'USD', 'GBP'], true);
     }
+
+    private function safeErrorMessage(Throwable $e, string $context, string $fallback): string {
+        if (function_exists('user_error_message')) {
+            return user_error_message($e, $context, $fallback);
+        }
+        error_log("[$context] " . $e->getMessage());
+        return $fallback;
+    }
     
     /**
      * Créer une session de paiement Stripe Checkout
@@ -206,7 +214,10 @@ class StripeHelper {
             ];
             
         } catch (Exception $e) {
-            return ['success' => false, 'message' => $e->getMessage()];
+            return [
+                'success' => false,
+                'message' => $this->safeErrorMessage($e, 'stripe.checkout', 'Erreur lors du paiement carte.')
+            ];
         }
     }
     
@@ -274,7 +285,10 @@ class StripeHelper {
             ];
             
         } catch (Exception $e) {
-            return ['success' => false, 'message' => $e->getMessage()];
+            return [
+                'success' => false,
+                'message' => $this->safeErrorMessage($e, 'stripe.verify', 'Erreur lors de la vérification du paiement.')
+            ];
         }
     }
     
@@ -292,7 +306,10 @@ class StripeHelper {
             return ['success' => true, 'event' => 'received'];
             
         } catch (Exception $e) {
-            return ['success' => false, 'message' => $e->getMessage()];
+            return [
+                'success' => false,
+                'message' => $this->safeErrorMessage($e, 'stripe.apply', 'Erreur lors de la mise à jour du paiement.')
+            ];
         }
     }
     

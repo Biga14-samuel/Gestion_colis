@@ -396,7 +396,19 @@ $typeColors = [
 </style>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 function markAsRead(notifId) {
     const item = document.querySelector(`.notification-item[data-notif-id="${notifId}"]`);
     if (item && item.classList.contains('unread')) {
@@ -410,7 +422,10 @@ function markAsRead(notifId) {
             },
             body: 'action=mark_read&notif_id=' + notifId
         })
-        .then(response => response.json())
+        .then(response => {
+            refreshCsrfToken(response);
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 item.classList.remove('unread');
@@ -445,7 +460,10 @@ function markAllAsRead() {
         },
         body: 'action=mark_all_read'
     })
-    .then(response => response.json())
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             showNotification('Toutes les notifications ont été marquées comme lues', 'success');

@@ -7,6 +7,7 @@
 require_once __DIR__ . '/utils/session.php';
 SessionManager::start();
 require_once 'config/database.php';
+require_once __DIR__ . '/utils/notification_service.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -15,6 +16,9 @@ $user_id = $_SESSION['user_id'] ?? 0;
 $user_role = $_SESSION['user_role'] ?? 'client';
 $message = '';
 $messageType = '';
+$podOtpTtlSeconds = 10 * 60;
+$podOtpMaxAttempts = 5;
+$podOtpResendCooldown = 30;
 
 // Vérifier la connexion et le rôle
 if (!$user_id) {
@@ -85,9 +89,166 @@ function agent_has_colis(PDO $db, int $agentId, int $colisId, array $allowedStat
     return (bool) $stmt->fetchColumn();
 }
 
+function generate_pod_otp(): string {
+    return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+}
+
+function fetch_pod_contact(PDO $db, int $colisId): ?array {
+    $stmt = $db->prepare("
+        SELECT c.id, c.code_tracking, c.telephone_destinataire, c.nom_destinataire,
+               d.telephone AS destinataire_tel, d.prenom AS destinataire_prenom, d.nom AS destinataire_nom
+        FROM colis c
+        LEFT JOIN utilisateurs d ON c.destinataire_id = d.id
+        WHERE c.id = ?
+    ");
+    $stmt->execute([$colisId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function create_in_app_notification(PDO $db, int $userId, string $type, string $title, string $message, string $priority = 'normal'): void {
+    $stmt = $db->prepare("
+        INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi)
+        VALUES (?, ?, ?, ?, ?, NOW())
+    ");
+    $stmt->execute([$userId, $type, $title, $message, $priority]);
+}
+
 // Traitement de la livraison
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    if ($action === 'send_pod_otp') {
+        $colis_id = (int) ($_POST['colis_id'] ?? 0);
+        if ($colis_id <= 0 || !agent_has_colis($db, (int) $agent['id'], $colis_id, ['assignee', 'en_cours'])) {
+            echo json_encode(['success' => false, 'message' => 'Colis non assigné.']);
+            exit;
+        }
+
+        $existing = $_SESSION['pod_otp'][$colis_id] ?? null;
+        $lastSentAt = isset($existing['sent_at']) ? (int) $existing['sent_at'] : 0;
+        if ($lastSentAt > 0 && (time() - $lastSentAt) < $podOtpResendCooldown) {
+            $waitSeconds = $podOtpResendCooldown - (time() - $lastSentAt);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Veuillez patienter avant de renvoyer le code.',
+                'retry_after' => $waitSeconds
+            ]);
+            exit;
+        }
+
+        $colis = fetch_pod_contact($db, $colis_id);
+        if (!$colis) {
+            echo json_encode(['success' => false, 'message' => 'Colis introuvable.']);
+            exit;
+        }
+
+        $otp = generate_pod_otp();
+        $otpHash = password_hash($otp, PASSWORD_DEFAULT);
+        $_SESSION['pod_otp'][$colis_id] = [
+            'hash' => $otpHash,
+            'expires_at' => time() + $podOtpTtlSeconds,
+            'attempts' => 0,
+            'sent_at' => time()
+        ];
+        unset($_SESSION['otp_verified_for_colis'][$colis_id]);
+
+        $phone = $colis['destinataire_tel'] ?: $colis['telephone_destinataire'];
+        $trackingCode = $colis['code_tracking'] ?? ('#' . $colis_id);
+        $recipientName = trim(($colis['destinataire_prenom'] ?? '') . ' ' . ($colis['destinataire_nom'] ?? ''));
+        if ($recipientName === '') {
+            $recipientName = $colis['nom_destinataire'] ?? 'Destinataire';
+        }
+
+        $messageText = "Votre code OTP de livraison pour le colis {$trackingCode} est: {$otp}. Il expire dans 10 minutes.";
+        $smsSent = false;
+
+        if (!empty($phone)) {
+            try {
+                $notificationService = new NotificationService();
+                $smsResult = $notificationService->sendSMS($phone, $messageText);
+                $smsSent = !empty($smsResult['success']);
+            } catch (Exception $e) {
+                $smsSent = false;
+            }
+        }
+
+        if (!$smsSent) {
+            create_in_app_notification(
+                $db,
+                (int) $user_id,
+                'livraison',
+                'Code OTP de livraison',
+                "Code OTP pour {$trackingCode} ({$recipientName}): {$otp}",
+                'high'
+            );
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => $smsSent ? 'Code OTP envoyé au destinataire.' : 'Code OTP généré (notification interne).',
+            'fallback' => !$smsSent,
+            'expires_in' => $podOtpTtlSeconds
+        ]);
+        exit;
+    }
+
+    if ($action === 'verify_pod_otp') {
+        $colis_id = (int) ($_POST['colis_id'] ?? 0);
+        $otp = trim($_POST['otp'] ?? '');
+
+        if ($colis_id <= 0 || !agent_has_colis($db, (int) $agent['id'], $colis_id, ['assignee', 'en_cours'])) {
+            echo json_encode(['success' => false, 'message' => 'Colis non assigné.']);
+            exit;
+        }
+
+        if (!preg_match('/^[0-9]{6}$/', $otp)) {
+            echo json_encode(['success' => false, 'message' => 'Code OTP invalide.']);
+            exit;
+        }
+
+        $record = $_SESSION['pod_otp'][$colis_id] ?? null;
+        if (!$record || empty($record['hash']) || empty($record['expires_at'])) {
+            echo json_encode(['success' => false, 'message' => 'Aucun code OTP actif.']);
+            exit;
+        }
+
+        $expiresAt = (int) $record['expires_at'];
+        if (time() > $expiresAt) {
+            unset($_SESSION['pod_otp'][$colis_id]);
+            echo json_encode(['success' => false, 'message' => 'Code OTP expiré.']);
+            exit;
+        }
+
+        $attempts = (int) ($record['attempts'] ?? 0);
+        if ($attempts >= $podOtpMaxAttempts) {
+            unset($_SESSION['pod_otp'][$colis_id]);
+            echo json_encode(['success' => false, 'message' => 'Trop de tentatives.']);
+            exit;
+        }
+
+        if (!password_verify($otp, (string) $record['hash'])) {
+            $attempts++;
+            $_SESSION['pod_otp'][$colis_id]['attempts'] = $attempts;
+            $remaining = max(0, $podOtpMaxAttempts - $attempts);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Code OTP incorrect.',
+                'attempts_remaining' => $remaining
+            ]);
+            exit;
+        }
+
+        unset($_SESSION['pod_otp'][$colis_id]);
+        $_SESSION['otp_verified_for_colis'][$colis_id] = time() + $podOtpTtlSeconds;
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Code OTP validé.',
+            'verified_until' => $_SESSION['otp_verified_for_colis'][$colis_id]
+        ]);
+        exit;
+    }
     
     if ($action === 'complete_delivery') {
         $colis_id = (int) ($_POST['colis_id'] ?? 0);
@@ -101,7 +262,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Ce colis ne vous est pas assigné.';
             $messageType = 'error';
         } else {
-        
+            $otpVerifiedUntil = (int) ($_SESSION['otp_verified_for_colis'][$colis_id] ?? 0);
+            if ($otpVerifiedUntil <= time()) {
+                if ($otpVerifiedUntil > 0) {
+                    unset($_SESSION['otp_verified_for_colis'][$colis_id]);
+                }
+                $message = 'Validation OTP requise pour finaliser la livraison.';
+                $messageType = 'error';
+            }
+        }
+
+        if ($messageType !== 'error') {
         // Gérer l'upload de la photo
         $proof_photo_path = null;
         $photoError = null;
@@ -162,11 +333,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->beginTransaction();
             
             // Déterminer le niveau de signature
-            $signature_level = 'simple';
-            if (!empty($signature_data)) {
-                if (!empty($_POST['otp_verified']) && $_POST['otp_verified'] === '1') {
-                    $signature_level = 'advanced';
+            $signature_level = 'advanced';
+            $otpVerifiedUntil = (int) ($_SESSION['otp_verified_for_colis'][$colis_id] ?? 0);
+            if ($otpVerifiedUntil > time()) {
+                unset($_SESSION['otp_verified_for_colis'][$colis_id]);
+                if (empty($_SESSION['otp_verified_for_colis'])) {
+                    unset($_SESSION['otp_verified_for_colis']);
                 }
+            } else {
+                if ($otpVerifiedUntil > 0) {
+                    unset($_SESSION['otp_verified_for_colis'][$colis_id]);
+                }
+                throw new RuntimeException('Validation OTP requise pour finaliser la livraison.');
             }
             
             // Mettre à jour le colis
@@ -230,22 +408,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             // Créer une notification pour le destinataire
-            $stmt = $db->prepare("SELECT destinataire_id FROM colis WHERE id = ?");
+            $stmt = $db->prepare("SELECT destinataire_id, code_tracking FROM colis WHERE id = ?");
             $stmt->execute([$colis_id]);
             $colisInfo = $stmt->fetch();
             
             if ($colisInfo && $colisInfo['destinataire_id']) {
-                $stmt = $db->prepare("
-                    INSERT INTO notifications (user_id, type, title, message, link)
-                    VALUES (?, 'delivery', 'Colis livré', 'Votre colis a été livré avec succès !', 'mes_colis.php')
-                ");
-                $stmt->execute([$colisInfo['destinataire_id']]);
+                $trackingCode = $colisInfo['code_tracking'] ?? ('#' . $colis_id);
+                create_in_app_notification(
+                    $db,
+                    (int) $colisInfo['destinataire_id'],
+                    'livraison',
+                    'Colis livré',
+                    "Votre colis {$trackingCode} a été livré avec succès !",
+                    'normal'
+                );
             }
             
             $db->commit();
             
-            createNotification($user_id, 'delivery', 'Livraison effectuée', 
-                'La livraison du colis #' . $colis_id . ' a été enregistrée.');
+            create_in_app_notification(
+                $db,
+                (int) $user_id,
+                'livraison',
+                'Livraison effectuée',
+                'La livraison du colis #' . $colis_id . ' a été enregistrée.',
+                'normal'
+            );
             
             $message = 'Livraison effectuée avec succès !';
             $messageType = 'success';
@@ -341,17 +529,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         }
     }
-}
-
-function createNotification($userId, $type, $title, $message) {
-    $database = new Database();
-    $db = $database->getConnection();
-    
-    $stmt = $db->prepare("
-        INSERT INTO notifications (user_id, type, title, message) 
-        VALUES (?, ?, ?, ?)
-    ");
-    $stmt->execute([$userId, $type, $title, $message]);
 }
 
 $statutLabels = [
@@ -504,7 +681,7 @@ $statutColors = [
                     <div class="step-number">3</div>
                     <div class="step-content">
                         <h4>Faire signer</h4>
-                        <p>Le destinataire signe sur l'écran ou utilise son code PIN.</p>
+                        <p>Le destinataire signe sur l'écran puis valide le code OTP envoyé.</p>
                     </div>
                 </div>
                 <div class="instruction-step">
@@ -538,10 +715,23 @@ $statutColors = [
 </div>
 
 <script>
-const csrfToken = <?php echo json_encode(csrf_token()); ?>;
+let csrfToken = <?php echo json_encode(csrf_token()); ?>;
+function refreshCsrfToken(response) {
+    const newToken = response.headers.get('X-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = newToken;
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+            input.value = newToken;
+        });
+    }
+    return response;
+}
 // Variables globales
 let currentDeliveryId = null;
 let locationWatcher = null;
+let podOtpVerified = false;
 
 // Fonctions pour gérer les modals
 function openModal(modalId) {
@@ -596,7 +786,7 @@ function requestLocation() {
                         'X-CSRF-Token': csrfToken
                     },
                     body: `action=update_location&latitude=${lat}&longitude=${lng}`
-                });
+                }).then(refreshCsrfToken);
             },
             error => {
                 console.warn('Erreur de géolocalisation:', error.message);
@@ -621,7 +811,105 @@ function openDeliveryModal(colisId) {
             
             // Initialiser le canvas de signature
             initSignatureCanvas();
+
+            // Réinitialiser l'OTP
+            resetPodOtpUi();
+
         });
+}
+
+function resetPodOtpUi() {
+    podOtpVerified = false;
+    const status = document.getElementById('podOtpStatus');
+    if (status) {
+        status.textContent = '';
+        status.className = 'otp-status';
+    }
+    const input = document.getElementById('podOtpCode');
+    if (input) {
+        input.value = '';
+    }
+}
+
+function showPodOtpStatus(message, type) {
+    const status = document.getElementById('podOtpStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.className = `otp-status ${type || ''}`.trim();
+}
+
+function sendPodOtp() {
+    if (!currentDeliveryId) {
+        showPodOtpStatus('Veuillez sélectionner une livraison.', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'send_pod_otp');
+    formData.append('colis_id', currentDeliveryId);
+
+    fetch('agent_pod.php', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-Token': csrfToken }
+    })
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            podOtpVerified = false;
+            showPodOtpStatus(data.message || 'Code OTP envoyé.', 'success');
+        } else {
+            showPodOtpStatus(data.message || 'Erreur lors de l\'envoi.', 'error');
+        }
+    })
+    .catch(() => {
+        showPodOtpStatus('Erreur lors de l\'envoi.', 'error');
+    });
+}
+
+function verifyPodOtp() {
+    const input = document.getElementById('podOtpCode');
+    const otp = input ? input.value.trim() : '';
+
+    if (!currentDeliveryId) {
+        showPodOtpStatus('Veuillez sélectionner une livraison.', 'error');
+        return;
+    }
+    if (!/^[0-9]{6}$/.test(otp)) {
+        showPodOtpStatus('Veuillez entrer un code OTP valide (6 chiffres).', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'verify_pod_otp');
+    formData.append('colis_id', currentDeliveryId);
+    formData.append('otp', otp);
+
+    fetch('agent_pod.php', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-Token': csrfToken }
+    })
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            podOtpVerified = true;
+            showPodOtpStatus(data.message || 'OTP validé.', 'success');
+        } else {
+            podOtpVerified = false;
+            showPodOtpStatus(data.message || 'OTP invalide.', 'error');
+        }
+    })
+    .catch(() => {
+        podOtpVerified = false;
+        showPodOtpStatus('Erreur lors de la vérification.', 'error');
+    });
 }
 
 function failDelivery(colisId) {
@@ -637,7 +925,10 @@ function failDelivery(colisId) {
             body: formData,
             headers: { 'X-CSRF-Token': csrfToken }
         })
-        .then(response => response.text())
+        .then(response => {
+            refreshCsrfToken(response);
+            return response.text();
+        })
         .then(html => {
             document.open();
             document.write(html);
@@ -778,6 +1069,11 @@ function completeDelivery() {
         alert('Veuillez entrer le nom du destinataire.');
         return;
     }
+
+    if (!podOtpVerified) {
+        showPodOtpStatus('Veuillez valider le code OTP avant de confirmer.', 'error');
+        return;
+    }
     
     // Préparer les données
     const formData = new FormData();
@@ -793,7 +1089,10 @@ function completeDelivery() {
         body: formData,
         headers: { 'X-CSRF-Token': csrfToken }
     })
-    .then(response => response.text())
+    .then(response => {
+        refreshCsrfToken(response);
+        return response.text();
+    })
     .then(html => {
         document.open();
         document.write(html);

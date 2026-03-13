@@ -94,7 +94,7 @@ class CommissionService {
             ];
             
         } catch (PDOException $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
+            return ['success' => false, 'error' => user_error_message($e, 'commission.calculate', 'Erreur de base de données.')];
         }
     }
     

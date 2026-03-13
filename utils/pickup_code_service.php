@@ -109,7 +109,7 @@ class PickupCodeService {
             ];
             
         } catch (PDOException $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
+            return ['success' => false, 'error' => user_error_message($e, 'pickup_code.generate', 'Erreur de base de données.')];
         }
     }
     

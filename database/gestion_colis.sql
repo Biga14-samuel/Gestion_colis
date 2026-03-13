@@ -766,15 +766,4 @@ COMMIT;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 
 
--- =====================================================
--- PATCH: Agents manquants (utilisateurs 14-20)
--- Synchronisation table agents avec utilisateurs ayant rôle agent
--- =====================================================
-INSERT IGNORE INTO `agents` (`utilisateur_id`, `numero_agent`, `zone_livraison`, `vehicule_type`, `commission_rate`, `actif`, `date_certification`) VALUES
-(14, 'AG-DLA-003', 'Akwa, Douala',            'voiture', 10.00, 1, CURDATE()),
-(15, 'AG-BDA-002', 'Bamenda, Centre-Ville',    'moto',    9.50,  1, CURDATE()),
-(16, 'AG-BFS-001', 'Bafoussam, Quartier',      'moto',    9.50,  1, CURDATE()),
-(17, 'AG-GAR-001', 'Garoua, Centre',           'voiture', 10.00, 1, CURDATE()),
-(18, 'AG-MAR-001', 'Maroua, Domayo',           'voiture', 10.00, 1, CURDATE()),
-(19, 'AG-EBO-001', 'Ebolowa, Ville',           'moto',    9.50,  1, CURDATE()),
-(20, 'AG-KRI-001', 'Kribi, Plage',             'voiture', 10.00, 1, CURDATE());
+-- Données de test déplacées vers database/seed_data.sql

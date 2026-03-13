@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nom']) && isset($_POS
     if (empty($email)) $errors[] = "L'email est requis";
     if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "L'email n'est pas valide";
     if (empty($mot_de_passe)) $errors[] = "Le mot de passe est requis";
-    $passwordErrors = validatePasswordPolicy($mot_de_passe);
+    $passwordErrors = PasswordPolicy::validate($mot_de_passe);
     if (!empty($passwordErrors)) $errors[] = $passwordErrors[0];
     if ($mot_de_passe !== $confirmer_mot_de_passe) $errors[] = "Les mots de passe ne correspondent pas";
     if (!isset($_POST['conditions']) || $_POST['conditions'] != '1') $errors[] = "Vous devez accepter les conditions générales";
