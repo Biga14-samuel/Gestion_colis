@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     <div class="code-main">
                         <div class="code-label">Code de retrait</div>
                         <div class="code-value" id="code-<?= $code['id'] ?>">
-                            <?= htmlspecialchars($code['code'] ?? 'N/A') ?>
+                            <?= htmlspecialchars($code['code_pin'] ?? 'N/A') ?>
                         </div>
                         <div class="code-details">
                             <div class="code-detail">
@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 <?= ($code['utilise'] ?? 0) ? 'Utilisé' : 'Actif' ?>
                             </span>
                         </div>
-                        <button class="btn btn-copy" onclick="copyCode(<?= $code['id'] ?>, '<?= htmlspecialchars($code['code'] ?? '') ?>')">
+                        <button class="btn btn-copy" onclick="copyCode(<?= $code['id'] ?>, '<?= htmlspecialchars($code['code_pin'] ?? '') ?>')">
                             <i class="fas fa-copy"></i> Copier
                         </button>
                     </div>

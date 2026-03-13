@@ -205,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reference_colis'])) {
     if (empty($errors)) {
         try {
             // Générer un code de tracking unique
-            $code_tracking = 'TRK' . date('Ymd') . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
+            $code_tracking = 'TRK' . date('Ymd') . str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
             
             // Valeur par défaut pour les dimensions (non obligatoire pour l'utilisateur)
             $dimensions = 'Non spécifié';

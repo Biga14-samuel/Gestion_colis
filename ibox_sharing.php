@@ -61,49 +61,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $response['message'] = 'Vous ne pouvez pas partager avec vous-même.';
         } else {
             try {
-                // Vérifier si l'utilisateur existe
-                $stmt = $db->prepare("SELECT id, email FROM utilisateurs WHERE email = ?");
-                $stmt->execute([$email]);
-                $recipient = $stmt->fetch();
-                
-                $shared_with_user_id = $recipient ? $recipient['id'] : null;
-                
-                // Vérifier si le partage existe déjà
-                $stmt = $db->prepare("
-                    SELECT id FROM ibox_shares 
-                    WHERE ibox_id = ? AND (shared_with_email = ? OR shared_with_user_id = ?)
-                    AND is_active = 1
-                ");
-                $stmt->execute([$ibox_id, $email, $shared_with_user_id]);
-                if ($stmt->fetch()) {
-                    $response['message'] = 'Cette boîte est déjà partagée avec cet utilisateur.';
+                // Vérifier que l'iBox appartient bien à l'utilisateur connecté
+                $stmt = $db->prepare("SELECT id FROM ibox WHERE id = ? AND utilisateur_id = ?");
+                $stmt->execute([$ibox_id, $user_id]);
+                if (!$stmt->fetch()) {
+                    $response['message'] = 'Accès refusé.';
                 } else {
-                    // Créer le partage
+                    // Vérifier si l'utilisateur existe
+                    $stmt = $db->prepare("SELECT id, email FROM utilisateurs WHERE email = ?");
+                    $stmt->execute([$email]);
+                    $recipient = $stmt->fetch();
+                    
+                    $shared_with_user_id = $recipient ? $recipient['id'] : null;
+                    
+                    // Vérifier si le partage existe déjà
                     $stmt = $db->prepare("
-                        INSERT INTO ibox_shares (ibox_id, owner_id, shared_with_user_id, shared_with_email, permission_level, share_method)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        SELECT id FROM ibox_shares 
+                        WHERE ibox_id = ? AND (shared_with_email = ? OR shared_with_user_id = ?)
+                        AND is_active = 1
                     ");
-                    $stmt->execute([$ibox_id, $user_id, $shared_with_user_id, $email, $permission, $share_method]);
-                    
-                    // Créer une notification pour le destinataire
-                    if ($shared_with_user_id) {
-                        $stmt = $db->prepare("SELECT code_box FROM ibox WHERE id = ?");
-                        $stmt->execute([$ibox_id]);
-                        $ibox = $stmt->fetch();
-                        
+                    $stmt->execute([$ibox_id, $email, $shared_with_user_id]);
+                    if ($stmt->fetch()) {
+                        $response['message'] = 'Cette boîte est déjà partagée avec cet utilisateur.';
+                    } else {
+                        // Créer le partage
                         $stmt = $db->prepare("
-                            INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi)
-                            VALUES (?, 'system', 'Partage iBox', ?, 'normal', NOW())
+                            INSERT INTO ibox_shares (ibox_id, owner_id, shared_with_user_id, shared_with_email, permission_level, share_method)
+                            VALUES (?, ?, ?, ?, ?, ?)
                         ");
-                        $stmt->execute([$shared_with_user_id, 
-                            'Une iBox (' . ($ibox['code_box'] ?? '') . ') vous a été partagée.']);
+                        $stmt->execute([$ibox_id, $user_id, $shared_with_user_id, $email, $permission, $share_method]);
+                        
+                        // Créer une notification pour le destinataire
+                        if ($shared_with_user_id) {
+                            $stmt = $db->prepare("SELECT code_box FROM ibox WHERE id = ?");
+                            $stmt->execute([$ibox_id]);
+                            $ibox = $stmt->fetch();
+                            
+                            $stmt = $db->prepare("
+                                INSERT INTO notifications (utilisateur_id, type, titre, message, priorite, date_envoi)
+                                VALUES (?, 'system', 'Partage iBox', ?, 'normal', NOW())
+                            ");
+                            $stmt->execute([$shared_with_user_id, 
+                                'Une iBox (' . ($ibox['code_box'] ?? '') . ') vous a été partagée.']);
+                        }
+                        
+                        // Logger l'action
+                        logIboxAction($db, $ibox_id, $user_id, 'SHARE', "Partage avec $email via $share_method");
+                        
+                        $response['success'] = true;
+                        $response['message'] = 'Boîte partagée avec succès !';
                     }
-                    
-                    // Logger l'action
-                    logIboxAction($db, $ibox_id, $user_id, 'SHARE', "Partage avec $email via $share_method");
-                    
-                    $response['success'] = true;
-                    $response['message'] = 'Boîte partagée avec succès !';
                 }
             } catch (Exception $e) {
                 $response['message'] = user_error_message($e, 'ibox_sharing.share', 'Erreur lors du partage de la iBox.');

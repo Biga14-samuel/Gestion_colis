@@ -7,6 +7,15 @@
 
 function session_start_if_needed(): void {
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        if (PHP_SAPI !== 'cli') {
+            session_set_cookie_params([
+                'lifetime' => 0,
+                'path' => '/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
+        }
         @session_start();
     }
 }
@@ -30,15 +39,14 @@ function session_enforce_timeout(int $idleSeconds = 1800, int $absoluteSeconds =
 
         if (ini_get('session.use_cookies')) {
             $params = session_get_cookie_params();
-            setcookie(
-                session_name(),
-                '',
-                $now - 42000,
-                $params['path'],
-                $params['domain'],
-                $params['secure'],
-                $params['httponly']
-            );
+            setcookie(session_name(), '', [
+                'expires' => $now - 42000,
+                'path' => $params['path'] ?? '/',
+                'domain' => $params['domain'] ?? '',
+                'secure' => $params['secure'] ?? true,
+                'httponly' => $params['httponly'] ?? true,
+                'samesite' => $params['samesite'] ?? 'Lax'
+            ]);
         }
 
         session_destroy();

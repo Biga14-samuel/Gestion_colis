@@ -6,10 +6,10 @@
  * =====================================================
  */
 
+require_once __DIR__ . '/session.php';
+
 function csrf_ensure_session(): void {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        @session_start();
-    }
+    session_start_if_needed();
 }
 
 function csrf_token(): string {

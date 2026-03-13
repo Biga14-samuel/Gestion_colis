@@ -38,42 +38,59 @@ class LegalTimestampService {
         
         // Générer la clé privée
         $privkey = openssl_pkey_new($config);
+        $privateKey = '';
+        $csr = null;
+        $x509 = null;
         
         if (!$privkey) {
             throw new Exception('Erreur lors de la génération des clés');
         }
-        
-        // Exporter la clé privée
-        openssl_pkey_export($privkey, $privateKey);
-        
-        // Créer un certificat auto-signé
-        $dn = [
-            'countryName' => 'FR',
-            'stateOrProvinceName' => 'France',
-            'localityName' => 'Paris',
-            'organizationName' => 'Gestion_Colis',
-            'commonName' => $commonName
-        ];
-        
-        $csr = openssl_csr_new($dn, $privkey, ['digest_alg' => 'sha256']);
-        $x509 = openssl_csr_sign($csr, null, $privkey, 365, ['digest_alg' => 'sha256']);
-        
-        $cert = '';
-        openssl_x509_export($x509, $cert);
-        
-        // Sauvegarder les fichiers
-        file_put_contents($this->privateKeyPath, $privateKey);
-        file_put_contents($this->certificatePath, $cert);
-        
-        // Libérer les ressources
-        openssl_pkey_free($privkey);
-        openssl_csr_free($csr);
-        openssl_x509_free($x509);
-        
-        return [
-            'private_key' => $privateKey,
-            'certificate' => $cert
-        ];
+
+        try {
+            // Exporter la clé privée
+            if (!openssl_pkey_export($privkey, $privateKey)) {
+                throw new Exception('Erreur lors de l\'export de la clé privée');
+            }
+
+            // Créer un certificat auto-signé
+            $dn = [
+                'countryName' => 'FR',
+                'stateOrProvinceName' => 'France',
+                'localityName' => 'Paris',
+                'organizationName' => 'Gestion_Colis',
+                'commonName' => $commonName
+            ];
+            
+            $csr = openssl_csr_new($dn, $privkey, ['digest_alg' => 'sha256']);
+            if (!$csr) {
+                throw new Exception('Erreur lors de la création du CSR');
+            }
+
+            $x509 = openssl_csr_sign($csr, null, $privkey, 365, ['digest_alg' => 'sha256']);
+            if (!$x509) {
+                throw new Exception('Erreur lors de la signature du certificat');
+            }
+            
+            $cert = '';
+            if (!openssl_x509_export($x509, $cert)) {
+                throw new Exception('Erreur lors de l\'export du certificat');
+            }
+
+            if ($privateKey === '' || $cert === '') {
+                throw new Exception('Clé privée ou certificat vide');
+            }
+            
+            // Sauvegarder les fichiers
+            file_put_contents($this->privateKeyPath, $privateKey);
+            file_put_contents($this->certificatePath, $cert);
+            
+            return [
+                'private_key' => $privateKey,
+                'certificate' => $cert
+            ];
+        } finally {
+            // Libérer les ressources
+        }
     }
     
     /**
@@ -223,7 +240,7 @@ class LegalTimestampService {
             'expires' => $timestamp + (5 * 365 * 24 * 60 * 60)
         ]);
         
-        return base64_encode($this->signData($data));
+        return $this->signData($data);
     }
     
     /**
@@ -244,7 +261,6 @@ class LegalTimestampService {
         
         $signature = '';
         openssl_sign($data, $signature, $pkey, OPENSSL_ALGO_SHA256);
-        
         return base64_encode($signature);
     }
     
@@ -255,7 +271,7 @@ class LegalTimestampService {
         if (empty($publicKey)) {
             // Fallback: vérifier avec le hash
             $expected = hash_hmac('sha256', $data, $this->tsaAuthority);
-            return base64_encode($signature) === $expected;
+            return hash_equals($expected, (string) $signature);
         }
         
         $pubkey = openssl_pkey_get_public($publicKey);
@@ -263,7 +279,10 @@ class LegalTimestampService {
             return false;
         }
         
-        $signature = base64_decode($signature);
+        $signature = base64_decode($signature, true);
+        if ($signature === false) {
+            return false;
+        }
         return openssl_verify($data, $signature, $pubkey, OPENSSL_ALGO_SHA256) === 1;
     }
     

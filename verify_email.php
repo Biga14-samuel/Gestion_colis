@@ -52,7 +52,7 @@ if (empty($token)) {
                 $postal = $stmt->fetch();
 
                 if (!$postal) {
-                    $postal_id_code = 'PID' . date('Y') . str_pad($user['id'], 6, '0', STR_PAD_LEFT);
+                    $postal_id_code = 'PID' . strtoupper(bin2hex(random_bytes(5)));
                     $qr_data = json_encode([
                         'user_id' => $user['id'],
                         'code' => $postal_id_code,

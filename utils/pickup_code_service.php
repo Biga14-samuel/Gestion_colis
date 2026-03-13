@@ -50,7 +50,8 @@ class PickupCodeService {
         if ($existingCode) {
             return [
                 'success' => true,
-                'code' => $existingCode['code_pin'],
+                'code' => null,
+                'code_masked' => isset($existingCode['code_pin']) ? $this->maskCode((string) $existingCode['code_pin']) : null,
                 'qr_code' => $existingCode['qr_code_data'],
                 'existing' => true,
                 'expires_at' => $existingCode['expires_at']
@@ -65,15 +66,17 @@ class PickupCodeService {
         
         // Générer le code PIN
         $pin = $this->generatePIN();
+        $maskedPin = $this->maskCode($pin);
         $codeHash = password_hash($pin, PASSWORD_DEFAULT);
         
         // Générer les données QR si nécessaire
         $qrData = null;
-        if ($type === 'qr' || $type === 'both') {
-            $qrData = $this->generateQRData($parcelId, $pin, $parcel['code_tracking']);
-        }
-        
         $expiresAt = date('Y-m-d H:i:s', strtotime("+{$this->config['code_expiry_hours']} hours"));
+        $expiresAtTs = strtotime($expiresAt) ?: (time() + ($this->config['code_expiry_hours'] * 3600));
+
+        if ($type === 'qr' || $type === 'both') {
+            $qrData = $this->generateQRData($parcelId, $expiresAtTs);
+        }
         
         try {
             $stmt = $this->db->prepare("
@@ -86,10 +89,11 @@ class PickupCodeService {
             $stmt->execute([
                 $parcelId,
                 $parcel['ibox_id'],
-                $pin,
+                $maskedPin,
                 $codeHash,
                 $type === 'qr' ? 'qr' : 'pin',
-                $qrData
+                $qrData,
+                $expiresAt
             ]);
             
             $codeId = $this->db->lastInsertId();
@@ -151,7 +155,7 @@ class PickupCodeService {
             $this->markAsUsed($pickupCode['id']);
             
             // Logger l'accès
-            $this->logAccess($pickupCode['id'], $userId, 'acces_autorise', true);
+            $this->logAccess($pickupCode['id'], $userId, 'acces_autorise', true, $this->maskCode($code));
             
             return [
                 'success' => true,
@@ -243,7 +247,7 @@ class PickupCodeService {
     /**
      * Logger un accès
      */
-    private function logAccess($codeId, $userId, $action, $success) {
+    private function logAccess($codeId, $userId, $action, $success, $codeUsed = null) {
         $stmt = $this->db->prepare("
             INSERT INTO ibox_access_logs (
                 ibox_id, utilisateur_id, agent_id, action, 
@@ -257,20 +261,10 @@ class PickupCodeService {
         $stmt->execute([
             $userId,
             $action,
-            $success ? $this->getCodeDisplay($codeId) : null,
+            $success ? $codeUsed : null,
             $_SERVER['REMOTE_ADDR'] ?? null,
             $codeId
         ]);
-    }
-    
-    /**
-     * Récupérer le code affiché (masqué)
-     */
-    private function getCodeDisplay($codeId) {
-        $stmt = $this->db->prepare("SELECT code_pin FROM pickup_codes WHERE id = ?");
-        $stmt->execute([$codeId]);
-        $code = $stmt->fetch()['code_pin'];
-        return substr($code, 0, 2) . '****' . substr($code, -2);
     }
     
     /**
@@ -325,29 +319,56 @@ class PickupCodeService {
         }
         return $pin;
     }
+
+    /**
+     * Masquer un code PIN pour affichage/stockage
+     */
+    private function maskCode(string $code): string {
+        $len = function_exists('mb_strlen') ? mb_strlen($code) : strlen($code);
+        if ($len <= 4) {
+            return str_repeat('*', $len);
+        }
+        $prefix = substr($code, 0, 2);
+        $suffix = substr($code, -2);
+        return $prefix . str_repeat('*', max(0, $len - 4)) . $suffix;
+    }
     
     /**
      * Générer les données QR
      */
-    private function generateQRData($parcelId, $pin, $trackingCode) {
-        $data = json_encode([
+    private function generateQRData($parcelId, $expiresAtTs) {
+        $nonce = bin2hex(random_bytes(8));
+        $dataToSign = $parcelId . '|' . $expiresAtTs . '|' . $nonce;
+        $secret = $this->getPickupQrSecret();
+        $signature = base64_encode(hash_hmac('sha256', $dataToSign, $secret, true));
+
+        $payload = [
             'type' => 'pickup',
             'parcel_id' => $parcelId,
-            'code' => $pin,
-            'tracking' => $trackingCode,
-            'expires' => date('c', strtotime("+{$this->config['code_expiry_hours']} hours")),
+            'exp' => $expiresAtTs,
+            'nonce' => $nonce,
+            'token' => $signature,
             'app' => 'gestion-colis'
-        ]);
+        ];
         
-        // Encoder en base64 pour compresser
-        return base64_encode($data);
+        return base64_encode(json_encode($payload));
+    }
+
+    private function getPickupQrSecret(): string {
+        $secret = getenv('PICKUP_QR_SECRET');
+        if (is_string($secret) && $secret !== '') {
+            return $secret;
+        }
+        // Fallback conservateur pour éviter de générer des QR non vérifiables
+        return hash('sha256', (string) (DB_PASS ?? ''));
     }
     
     /**
      * Générer l'URL du QR Code
      */
     public function getQRCodeUrl($qrData) {
-        $decoded = json_decode(base64_decode($qrData), true);
+        $decodedRaw = base64_decode($qrData, true);
+        $decoded = $decodedRaw !== false ? json_decode($decodedRaw, true) : null;
         if (!$decoded) {
             // Essayer de parser directement
             $decoded = json_decode($qrData, true);
