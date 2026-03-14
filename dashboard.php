@@ -1435,8 +1435,7 @@ try {
         .card-body {
             padding: 1rem;
         }
-        }
-        
+
         .card-body {
             padding: 1.25rem;
         }

@@ -51,9 +51,10 @@ foreach ($files as $file) {
     }
 
     echo "▶ {$name}\n";
+    $migrationName = $name; // éviter toute modification accidentelle dans le scope du require
     require $file;
 
     $stmt = $db->prepare("INSERT INTO schema_migrations (migration) VALUES (?)");
-    $stmt->execute([$name]);
-    echo "✅ {$name} appliquée.\n";
+    $stmt->execute([$migrationName]);
+    echo "✅ {$migrationName} appliquée.\n";
 }

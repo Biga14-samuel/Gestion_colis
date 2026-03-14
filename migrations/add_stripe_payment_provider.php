@@ -21,8 +21,8 @@ $queries = [
 foreach ($queries as $sql) {
     try {
         $db->exec($sql);
-        echo \"✅ {$sql}\\n\";
+        echo "✅ {$sql}\n";
     } catch (PDOException $e) {
-        echo \"⚠️ {$sql} -> \" . $e->getMessage() . \"\\n\";
+        echo "⚠️ {$sql} -> " . $e->getMessage() . "\n";
     }
 }
